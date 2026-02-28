@@ -6,7 +6,8 @@ st.set_page_config(page_title="Buscador de Espacios", layout="wide")
 st.title("🏫 Buscador Rápido para Asistentes")
 
 # --- 1. TUS ENLACES (¡RELLENA LAS LÍNEAS 9 y 11!) ---
-LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv"
+LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv
+"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=447717872&single=true&output=csv"
 LINK_CONFIG = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=0&single=true&output=csv"
 
@@ -36,51 +37,23 @@ try:
     df_reservas = cargar_reservas()
     todos_los_espacios = cargar_espacios_totales()
 
-    # --- 3. MENÚ LATERAL DE BÚSQUEDA ---
-    st.sidebar.header("🔍 Buscar por Momento")
-    dias = df_ocupados['DÍA'].dropna().unique()
-    dia_elegido = st.sidebar.selectbox("📅 Día:", dias)
+    # --- 3. SELECTOR DE MODO PRINCIPAL ---
+    st.sidebar.header("⚙️ ¿Qué necesitas hacer?")
+    modo = st.sidebar.radio("", ["🕰️ Buscar Espacios por Horario", "🧑‍🏫 Buscar Agenda de Docente/Curso"])
     
-    bloques = df_ocupados[df_ocupados['DÍA'] == dia_elegido]['BLOQUE'].dropna().unique()
-    bloque_elegido = st.sidebar.selectbox("⏰ Bloque:", bloques)
-
     st.sidebar.divider()
 
-    st.sidebar.header("🔎 Buscar Agenda Completa")
-    
-    # Python arma las listas de docentes y cursos ordenadas alfabéticamente
-    lista_docentes = sorted([d for d in df_ocupados['DOCENTES'].dropna().unique() if str(d).strip() != ""])
-    lista_cursos = sorted([c for c in df_ocupados['CURSOS'].dropna().unique() if str(c).strip() != ""])
-    
-    # Agregamos la opción neutra al principio
-    opciones_docentes = ["-- Seleccionar --"] + lista_docentes
-    opciones_cursos = ["-- Seleccionar --"] + lista_cursos
-    
-    docente_buscado = st.sidebar.selectbox("👩‍🏫 Por Docente:", opciones_docentes)
-    curso_buscado = st.sidebar.selectbox("🎓 Por Curso:", opciones_cursos)
+    # ==========================================
+    # MODO 1: ESPACIOS POR HORARIO
+    # ==========================================
+    if modo == "🕰️ Buscar Espacios por Horario":
+        st.sidebar.header("🔍 Elige el momento:")
+        dias = df_ocupados['DÍA'].dropna().unique()
+        dia_elegido = st.sidebar.selectbox("📅 Día:", dias)
+        
+        bloques = df_ocupados[df_ocupados['DÍA'] == dia_elegido]['BLOQUE'].dropna().unique()
+        bloque_elegido = st.sidebar.selectbox("⏰ Bloque:", bloques)
 
-    # --- 4. LÓGICA DE LA PANTALLA PRINCIPAL ---
-    # Si el usuario eligió un docente o un curso del desplegable:
-    if docente_buscado != "-- Seleccionar --" or curso_buscado != "-- Seleccionar --":
-        
-        if docente_buscado != "-- Seleccionar --":
-            st.header(f"Agenda de: {docente_buscado}")
-            filtro = df_ocupados[df_ocupados['DOCENTES'] == docente_buscado]
-        else:
-            st.header(f"Agenda de: {curso_buscado}")
-            filtro = df_ocupados[df_ocupados['CURSOS'] == curso_buscado]
-        
-        st.write("Mostrando todos los horarios registrados para esta búsqueda en la semana.")
-        
-        if not filtro.empty:
-            columnas = ['DÍA', 'BLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
-            cols_ok = [c for c in columnas if c in filtro.columns]
-            st.dataframe(filtro[cols_ok], hide_index=True, use_container_width=True)
-        else:
-            st.warning("No hay horarios registrados para esta selección.")
-            
-    # Si los desplegables están en "-- Seleccionar --", mostramos la vista normal:
-    else:
         st.header(f"Resultados para: {dia_elegido} - Bloque {bloque_elegido}")
 
         ocupados_filtrado = df_ocupados[(df_ocupados['DÍA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
@@ -115,6 +88,43 @@ try:
             st.dataframe(ocupados_filtrado[columnas_existentes], hide_index=True, use_container_width=True)
         else:
             st.write("No hay clases regulares registradas en este horario.")
+
+    # ==========================================
+    # MODO 2: AGENDA DE DOCENTE O CURSO
+    # ==========================================
+    else:
+        st.sidebar.header("🔎 Buscar Agenda")
+        
+        lista_docentes = sorted([d for d in df_ocupados['DOCENTES'].dropna().unique() if str(d).strip() != ""])
+        lista_cursos = sorted([c for c in df_ocupados['CURSOS'].dropna().unique() if str(c).strip() != ""])
+        
+        opciones_docentes = ["-- Seleccionar --"] + lista_docentes
+        opciones_cursos = ["-- Seleccionar --"] + lista_cursos
+        
+        # Un sub-botón para elegir si buscamos docente o curso
+        tipo_filtro = st.sidebar.radio("Buscar por:", ["Docente", "Curso"])
+
+        if tipo_filtro == "Docente":
+            seleccion = st.sidebar.selectbox("👩‍🏫 Elige Docente:", opciones_docentes)
+            columna_filtro = 'DOCENTES'
+        else:
+            seleccion = st.sidebar.selectbox("🎓 Elige Curso:", opciones_cursos)
+            columna_filtro = 'CURSOS'
+
+        if seleccion != "-- Seleccionar --":
+            st.header(f"Agenda de: {seleccion}")
+            st.write("Mostrando todos los horarios registrados en la semana para esta búsqueda.")
+            
+            filtro = df_ocupados[df_ocupados[columna_filtro] == seleccion]
+            
+            if not filtro.empty:
+                columnas = ['DÍA', 'BLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
+                cols_ok = [c for c in columnas if c in filtro.columns]
+                st.dataframe(filtro[cols_ok], hide_index=True, use_container_width=True)
+            else:
+                st.warning("No hay horarios registrados para esta selección.")
+        else:
+            st.info("👈 Por favor, selecciona un nombre o curso en el menú de la izquierda para ver su agenda completa.")
 
 except Exception as e:
     st.error(f"Error técnico: {e}")
