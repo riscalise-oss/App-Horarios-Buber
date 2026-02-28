@@ -6,9 +6,9 @@ st.set_page_config(page_title="Buscador de Espacios", layout="wide")
 st.title("🏫 Buscador Rápido para Asistentes")
 
 # --- 1. TUS ENLACES (¡RELLENA LAS LÍNEAS 9 y 11!) ---
-LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv"
+LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=447717872&single=true&output=csv"
-LINK_CONFIG = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=0&single=true&output=csv"
+LINK_CONFIG = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=0&single=true&output=csv"
 
 # --- 2. FUNCIONES PARA LEER TUS DATOS ---
 @st.cache_data
