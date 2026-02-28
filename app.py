@@ -6,7 +6,7 @@ st.title("🏫 Buscador de Horarios Escolares")
 st.write("Bienvenido. Aquí podrás consultar la disponibilidad de espacios y docentes.") 
 
 # 2. Tu enlace secreto de Google Sheets (¡Reemplaza el texto entre comillas!)
-LINK_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv"
+LINK_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=727803976&single=true&output=csv"
 
 # 3. Función para leer los datos (con memoria para que sea rápido)
 @st.cache_data
