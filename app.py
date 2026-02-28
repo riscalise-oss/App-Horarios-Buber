@@ -6,6 +6,7 @@ st.set_page_config(page_title="Buscador de Espacios", layout="wide")
 st.title("🏫 Buscador Rápido para Asistentes")
 
 # --- 1. TUS ENLACES ---
+# ⚠️ RECUERDA PEGAR TU ENLACE DE ASIGNACIONES AQUÍ:
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=447717872&single=true&output=csv"
 
@@ -18,15 +19,14 @@ def cargar_ocupados():
 
 @st.cache_data
 def cargar_reservas():
-    # El gran truco: skiprows=1 le dice a Python que ignore tu fila 1 (los títulos celestes)
-    # y empiece a leer desde la fila 2, donde están los encabezados reales de tus reservas.
-    df = pd.read_csv(LINK_RESERVAS, skiprows=1)
-    df.columns = df.columns.str.upper().str.strip()
+    # SOLUCIÓN: Leemos solo las columnas de la F a la J (índices 5 al 9) saltando la fila 1
+    df = pd.read_csv(LINK_RESERVAS, skiprows=1, usecols=[5, 6, 7, 8, 9])
     
-    # Le decimos que se quede SOLAMENTE con las columnas de tu tabla de la derecha
-    columnas_utiles = ['FECHA', 'DÍA', 'BLOQUE', 'ESPACIO', 'MOTIVO']
-    cols_existentes = [col for col in columnas_utiles if col in df.columns]
-    df_limpio = df[cols_existentes].dropna(how='all') # Borra filas totalmente vacías
+    # Las renombramos a la fuerza para que Python no se confunda con duplicados
+    df.columns = ['FECHA', 'DÍA', 'BLOQUE', 'ESPACIO', 'MOTIVO']
+    
+    # Borramos filas que estén completamente vacías
+    df_limpio = df.dropna(how='all') 
     return df_limpio
 
 try:
@@ -45,7 +45,7 @@ try:
 
     # --- 4. RESERVAS ESPECIALES ---
     st.subheader("⚠️ Reservas Especiales")
-    # Filtramos la tabla de reservas de la derecha
+    # Filtramos la tabla de reservas usando las columnas que renombramos
     reservas_filtradas = df_reservas[(df_reservas['DÍA'] == dia_elegido) & (df_reservas['BLOQUE'].astype(str) == str(bloque_elegido))]
     
     if not reservas_filtradas.empty:
