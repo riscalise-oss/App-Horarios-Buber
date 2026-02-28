@@ -3,7 +3,7 @@ import pandas as pd
 
 # 1. Título y descripción de tu app
 st.title("🏫 Buscador de Horarios Escolares")
-st.write("Bienvenido. Aquí podrás consultar la disponibilidad de espacios y docentes.")
+st.write("Bienvenido. Aquí podrás consultar la disponibilidad de espacios y docentes.") 
 
 # 2. Tu enlace secreto de Google Sheets (¡Reemplaza el texto entre comillas!)
 LINK_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv"
