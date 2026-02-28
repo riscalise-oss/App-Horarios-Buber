@@ -5,7 +5,7 @@ st.set_page_config(page_title="Buscador de Espacios", layout="wide")
 
 st.title("🏫 Buscador Rápido para Asistentes")
 
-# --- 1. TUS ENLACES (¡RELLENA AQUÍ!) ---
+# --- 1. TUS ENLACES (¡RELLENA LAS LÍNEAS 9 y 11!) ---
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQhgZSlV_TATdDowWFQkR-R_hK-F-OGu5dYfwfErAjbPnWsQ4jrQvgfxpQFxs73dtKalvDV1_f-Ec21/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=447717872&single=true&output=csv"
 LINK_CONFIG = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=0&single=true&output=csv"
@@ -46,31 +46,41 @@ try:
 
     st.sidebar.divider()
 
-    st.sidebar.header("🔎 Buscar a Alguien")
-    busqueda = st.sidebar.text_input("Nombre de docente o curso:", placeholder="Ej: Perez o 7mo")
+    st.sidebar.header("🔎 Buscar Agenda Completa")
+    
+    # Python arma las listas de docentes y cursos ordenadas alfabéticamente
+    lista_docentes = sorted([d for d in df_ocupados['DOCENTES'].dropna().unique() if str(d).strip() != ""])
+    lista_cursos = sorted([c for c in df_ocupados['CURSOS'].dropna().unique() if str(c).strip() != ""])
+    
+    # Agregamos la opción neutra al principio
+    opciones_docentes = ["-- Seleccionar --"] + lista_docentes
+    opciones_cursos = ["-- Seleccionar --"] + lista_cursos
+    
+    docente_buscado = st.sidebar.selectbox("👩‍🏫 Por Docente:", opciones_docentes)
+    curso_buscado = st.sidebar.selectbox("🎓 Por Curso:", opciones_cursos)
 
     # --- 4. LÓGICA DE LA PANTALLA PRINCIPAL ---
-    if busqueda:
-        # MODO BÚSQUEDA ESPECÍFICA (Muestra toda la semana de esa persona/curso)
-        st.header(f"Agenda de: '{busqueda}'")
-        st.write("Mostrando todos los horarios registrados para esta búsqueda.")
+    # Si el usuario eligió un docente o un curso del desplegable:
+    if docente_buscado != "-- Seleccionar --" or curso_buscado != "-- Seleccionar --":
         
-        # Buscamos coincidencias ignorando mayúsculas y minúsculas
-        filtro = df_ocupados[
-            df_ocupados['DOCENTES'].fillna('').str.contains(busqueda, case=False) |
-            df_ocupados['CURSOS'].fillna('').str.contains(busqueda, case=False)
-        ]
+        if docente_buscado != "-- Seleccionar --":
+            st.header(f"Agenda de: {docente_buscado}")
+            filtro = df_ocupados[df_ocupados['DOCENTES'] == docente_buscado]
+        else:
+            st.header(f"Agenda de: {curso_buscado}")
+            filtro = df_ocupados[df_ocupados['CURSOS'] == curso_buscado]
+        
+        st.write("Mostrando todos los horarios registrados para esta búsqueda en la semana.")
         
         if not filtro.empty:
-            # Agregamos Día y Bloque a la tabla para que sepan cuándo es
             columnas = ['DÍA', 'BLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
             cols_ok = [c for c in columnas if c in filtro.columns]
             st.dataframe(filtro[cols_ok], hide_index=True, use_container_width=True)
         else:
-            st.warning("No se encontró a nadie o ningún curso con ese nombre.")
+            st.warning("No hay horarios registrados para esta selección.")
             
+    # Si los desplegables están en "-- Seleccionar --", mostramos la vista normal:
     else:
-        # MODO NORMAL (Muestra los Libres y Ocupados del momento elegido)
         st.header(f"Resultados para: {dia_elegido} - Bloque {bloque_elegido}")
 
         ocupados_filtrado = df_ocupados[(df_ocupados['DÍA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
