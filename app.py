@@ -14,13 +14,36 @@ def cargar_datos():
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
-    # 2. LEER TU COLUMNA 'D' (Reservas Especiales)
-    # Leemos sin encabezados para asegurar que capturamos la columna exacta
-    df_config = pd.read_csv(LINK_RESERVAS, header=None)
-    # La Columna D es la número 3 (A=0, B=1, C=2, D=3)
-    columna_d_bruta = df_config.iloc[:, 3].dropna().astype(str).tolist()
-    # Limpiamos celdas vacías o el título de la columna para que quede prolijo
-    avisos_col_d = [a.strip() for a in columna_d_bruta if a.strip() != "" and a.strip().upper() not in ["RESERVAS", "RESERVA", "RESERVAS ESPECIALES"]]
+    # 2. LEER TU HOJA DE RESERVAS (Modo Rastreador Inteligente)
+    # Usamos engine='python' para que no se trabe con tus columnas separadoras negras
+    df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
+    
+    avisos_col_d = []
+    
+    # ESTRATEGIA A: Buscar la columna exacta por tu título amarillo
+    col_avisos = -1
+    for col in range(len(df_config.columns)):
+        col_data = df_config.iloc[:, col].fillna("").astype(str)
+        if col_data.str.contains("Espacios Bloqueados", case=False, na=False).any():
+            col_avisos = col
+            break
+            
+    if col_avisos != -1:
+        # Si encuentra el título, extraemos todo lo que hay debajo
+        avisos_brutos = df_config.iloc[:, col_avisos].fillna("").astype(str).tolist()
+        for a in avisos_brutos:
+            texto = a.strip()
+            # Filtramos celdas vacías y el propio título
+            if texto and "ESPACIOS BLOQUEADOS" not in texto.upper() and texto.upper() != "NAN":
+                if texto not in avisos_col_d:
+                    avisos_col_d.append(texto)
+    else:
+        # ESTRATEGIA B: Si no encuentra el título, buscamos los ⚠️ en TODA la hoja
+        for col in range(len(df_config.columns)):
+            for val in df_config.iloc[:, col].fillna("").astype(str):
+                val_str = str(val).strip()
+                if "⚠️" in val_str and val_str not in avisos_col_d:
+                    avisos_col_d.append(val_str)
 
     def limpiar_bloque(val):
         val_str = str(val).strip().upper()
@@ -64,11 +87,11 @@ try:
         st.subheader("📌 Reservas Especiales (Avisos)")
         if avisos_col_d:
             for aviso in avisos_col_d:
-                st.info(f"📝 {aviso}")
+                st.warning(f"{aviso}") # st.warning lo pondrá en una caja amarilla para que resalte
         else:
             st.write("No hay reservas especiales anotadas.")
 
-        # --- LÓGICA DE ESPACIOS LIBRES (Solo resta los regulares) ---
+        # --- LÓGICA DE ESPACIOS LIBRES ---
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
         lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
         espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
