@@ -4,6 +4,7 @@ import base64
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
+
 # --- OCULTAR MENÚ SUPERIOR Y GITHUB ---
 ocultar_menu = """
     <style>
@@ -13,6 +14,7 @@ ocultar_menu = """
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
+
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
@@ -154,7 +156,6 @@ try:
         # 3. ACORDEÓN PARA CLASES REGULARES
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
-                # AQUÍ SÍ DEJAMOS EL SUBBLOQUE
                 cols_mostrar = ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
                 cols_finales = [c for c in cols_mostrar if c in ocu.columns]
                 st.dataframe(ocu[cols_finales], hide_index=True, use_container_width=True)
@@ -179,10 +180,4 @@ try:
         st.header(f"Agenda de: {sel}")
         res_busqueda = df_ocupados[df_ocupados[col_filtro] == sel]
         
-        # AQUÍ QUITAMOS EL SUBBLOQUE PARA NO CONFUNDIR
-        cols_busqueda = ['DIA', 'BLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES']
-        cols_b_finales = [c for c in cols_busqueda if c in res_busqueda.columns]
-        st.dataframe(res_busqueda[cols_b_finales], hide_index=True, use_container_width=True)
-
-except Exception as e:
-    st.error(f"Error técnico: {e}")
+        # --- AQUÍ VOLVIMOS A SUMAR LA COLUMNA SUBBLOQUE
