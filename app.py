@@ -84,7 +84,8 @@ try:
         bloques = [b for b in df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique() if b != "NAN"]
         bloque_elegido = st.sidebar.selectbox("⏰ Bloque:", bloques)
 
-        st.header(f"Resultados: {dia_elegido} - Bloque {bloque_elegido}")
+        # ¡AQUÍ ESTÁ EL CAMBIO! Ya no dice "Resultados:"
+        st.header(f"{dia_elegido} - Bloque {bloque_elegido}")
 
         # PREPARAMOS LA LÓGICA DE ESPACIOS LIBRES PRIMERO
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
