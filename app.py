@@ -84,8 +84,21 @@ try:
         bloques = [b for b in df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique() if b != "NAN"]
         bloque_elegido = st.sidebar.selectbox("⏰ Bloque:", bloques)
 
-        # ¡AQUÍ ESTÁ EL CAMBIO! Ya no dice "Resultados:"
         st.header(f"{dia_elegido} - Bloque {bloque_elegido}")
+
+        # --- NUEVO: HORARIOS EXACTOS ---
+        horarios = {
+            "1": "7:40 a 9:00",
+            "2": "9:10 a 10:30",
+            "3": "10:45 a 12:05",
+            "4": "12:15 a 13:35",
+            "5": "13:45 a 15:05",
+            "6": "15:10 a 16:30"
+        }
+        
+        bloque_str = str(bloque_elegido).strip()
+        if bloque_str in horarios:
+            st.markdown(f"**⏱️ *{horarios[bloque_str]}***")
 
         # PREPARAMOS LA LÓGICA DE ESPACIOS LIBRES PRIMERO
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
