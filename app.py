@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import base64
-import re  # <--- NUEVO: Herramienta para buscar números en textos como (4-2)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
@@ -61,19 +60,18 @@ def cargar_datos():
             return val_str[:-2]
         return val_str
 
-    # --- NUEVA FUNCIÓN: Extraer el número principal del bloque ---
-    def extraer_base(val):
-        match = re.search(r'\d+', str(val))
-        return match.group(0) if match else str(val)
-
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
     if 'BLOQUE' in df_o.columns:
         df_o['BLOQUE'] = df_o['BLOQUE'].apply(limpiar_bloque)
-        # Creamos una columna oculta solo para que el sistema sepa buscar
-        df_o['BLOQUE_BASE'] = df_o['BLOQUE'].apply(extraer_base)
     if 'ESPACIOS' in df_o.columns:
         df_o['ESPACIOS'] = df_o['ESPACIOS'].astype(str).str.strip().str.upper()
+        
+    # --- Procesamos la columna SUBBLOQUE para que quede bonita ---
+    if 'SUBBLOQUE' in df_o.columns:
+        df_o['SUBBLOQUE'] = df_o['SUBBLOQUE'].astype(str).str.strip().str.upper()
+        # Si la celda está vacía (NAN), la dejamos en blanco para que no moleste en la tabla
+        df_o['SUBBLOQUE'] = df_o['SUBBLOQUE'].replace('NAN', '')
 
     espacios = df_o['ESPACIOS'].dropna().unique().tolist()
     espacios_totales = sorted([e for e in espacios if e != "NAN" and e != ""])
@@ -100,8 +98,8 @@ try:
         with col_dia:
             dia_elegido = st.selectbox("📅 Día:", dias)
         
-        # Ahora el menú desplegable solo muestra los bloques principales (1, 2, 3...)
-        bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE_BASE'].dropna().unique()
+        # Cargamos los bloques normalmente
+        bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_limpios = [b for b in bloques_raw if b != "NAN"]
         bloques_ordenados = sorted(bloques_limpios, key=lambda x: int(x) if x.isdigit() else x)
         
@@ -126,8 +124,7 @@ try:
         if bloque_str in horarios:
             st.markdown(f"**⏱️ *{horarios[bloque_str]}***")
 
-        # Filtramos buscando el BLOQUE_BASE (así engancha el "4" y el "(4-2)")
-        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE_BASE'] == str(bloque_elegido))]
+        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))]
         lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
         espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
 
@@ -149,8 +146,8 @@ try:
         # 3. ACORDEÓN PARA CLASES REGULARES
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
-                # ¡Agregamos 'BLOQUE' a la tabla para que se vea el "(4-2)"!
-                cols_mostrar = ['BLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
+                # AQUÍ SÍ DEJAMOS EL SUBBLOQUE
+                cols_mostrar = ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
                 cols_finales = [c for c in cols_mostrar if c in ocu.columns]
                 st.dataframe(ocu[cols_finales], hide_index=True, use_container_width=True)
             else:
@@ -174,7 +171,7 @@ try:
         st.header(f"Agenda de: {sel}")
         res_busqueda = df_ocupados[df_ocupados[col_filtro] == sel]
         
-        # Aquí también organizamos las columnas para que sea más fácil de leer
+        # AQUÍ QUITAMOS EL SUBBLOQUE PARA NO CONFUNDIR
         cols_busqueda = ['DIA', 'BLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES']
         cols_b_finales = [c for c in cols_busqueda if c in res_busqueda.columns]
         st.dataframe(res_busqueda[cols_b_finales], hide_index=True, use_container_width=True)
