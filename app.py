@@ -110,4 +110,21 @@ try:
         st.subheader("🔴 Clases Regulares")
         if not ocu.empty:
             cols_mostrar = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
-            cols_finales = [c for ]
+            cols_finales = [c for c in cols_mostrar if c in ocu.columns]
+            st.dataframe(ocu[cols_finales], hide_index=True, use_container_width=True)
+        else:
+            st.write("No hay clases regulares registradas.")
+
+    # --- MODO 2: BÚSQUEDA ---
+    else:
+        tipo = st.sidebar.radio("Buscar por:", ["Docente", "Curso"])
+        col = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
+        lista = sorted([x for x in df_ocupados[col].dropna().unique() if str(x).upper() != "NAN"])
+        sel = st.sidebar.selectbox(f"Selecciona {tipo}:", lista)
+        
+        st.header(f"Agenda de: {sel}")
+        res_busqueda = df_ocupados[df_ocupados[col] == sel]
+        st.dataframe(res_busqueda, hide_index=True, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
