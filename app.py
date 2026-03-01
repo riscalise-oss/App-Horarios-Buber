@@ -92,14 +92,14 @@ try:
         espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
 
         # 1. MOSTRAR ESPACIOS LIBRES ARRIBA DE TODO
-        st.subheader("🟢 Ámbitos Totalmente Libres")
+        st.subheader("🟢 Ámbitos Libres")
         if espacios_libres:
             st.success(" ✅ " + " | ✅ ".join(sorted(espacios_libres)))
         else:
             st.warning("No hay ningún ámbito libre en este horario.")
 
         # 2. MOSTRAR AVISOS DE FORMA COMPACTA (Una sola caja)
-        st.subheader("📌 Reservas Especiales (Avisos)")
+        st.subheader("📌 Reservas Especiales")
         if avisos_col_d:
             texto_avisos = "\n".join([f"- {aviso}" for aviso in avisos_col_d])
             st.warning(texto_avisos)
