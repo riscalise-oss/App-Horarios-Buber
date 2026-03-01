@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import base64
+import re  # <--- NUEVO: Herramienta para buscar números en textos como (4-2)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
@@ -60,10 +61,17 @@ def cargar_datos():
             return val_str[:-2]
         return val_str
 
+    # --- NUEVA FUNCIÓN: Extraer el número principal del bloque ---
+    def extraer_base(val):
+        match = re.search(r'\d+', str(val))
+        return match.group(0) if match else str(val)
+
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
     if 'BLOQUE' in df_o.columns:
         df_o['BLOQUE'] = df_o['BLOQUE'].apply(limpiar_bloque)
+        # Creamos una columna oculta solo para que el sistema sepa buscar
+        df_o['BLOQUE_BASE'] = df_o['BLOQUE'].apply(extraer_base)
     if 'ESPACIOS' in df_o.columns:
         df_o['ESPACIOS'] = df_o['ESPACIOS'].astype(str).str.strip().str.upper()
 
@@ -75,7 +83,7 @@ def cargar_datos():
 try:
     df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
 
-    # --- MENÚ LATERAL (AHORA MÁS LIMPIO) ---
+    # --- MENÚ LATERAL ---
     st.sidebar.header("⚙️ Opciones")
     if st.sidebar.button("🔄 Actualizar Datos Ahora"):
         st.cache_data.clear()
@@ -86,18 +94,21 @@ try:
 
     # --- PESTAÑA 1: HORARIO ---
     with tab1:
-        # Ponemos Día y Bloque en dos columnas para que no ocupe tanto espacio hacia abajo
         col_dia, col_bloque = st.columns(2)
         
         dias = [d for d in df_ocupados['DIA'].dropna().unique() if d != "NAN"]
         with col_dia:
             dia_elegido = st.selectbox("📅 Día:", dias)
         
-        bloques = [b for b in df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique() if b != "NAN"]
+        # Ahora el menú desplegable solo muestra los bloques principales (1, 2, 3...)
+        bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE_BASE'].dropna().unique()
+        bloques_limpios = [b for b in bloques_raw if b != "NAN"]
+        bloques_ordenados = sorted(bloques_limpios, key=lambda x: int(x) if x.isdigit() else x)
+        
         with col_bloque:
-            bloque_elegido = st.selectbox("⏰ Bloque:", bloques)
+            bloque_elegido = st.selectbox("⏰ Bloque:", bloques_ordenados)
 
-        st.divider() # Una línea para separar los filtros de los resultados
+        st.divider()
         
         st.header(f"{dia_elegido} - Bloque {bloque_elegido}")
 
@@ -115,18 +126,19 @@ try:
         if bloque_str in horarios:
             st.markdown(f"**⏱️ *{horarios[bloque_str]}***")
 
-        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
+        # Filtramos buscando el BLOQUE_BASE (así engancha el "4" y el "(4-2)")
+        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE_BASE'] == str(bloque_elegido))]
         lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
         espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
 
-        # 1. MOSTRAR ESPACIOS LIBRES ARRIBA DE TODO
+        # 1. MOSTRAR ESPACIOS LIBRES
         st.subheader("🟢 Ámbitos Libres")
         if espacios_libres:
             st.success(" ✅ " + " | ✅ ".join(sorted(espacios_libres)))
         else:
             st.warning("No hay ningún ámbito libre en este horario.")
 
-        # 2. MOSTRAR AVISOS DE FORMA COMPACTA
+        # 2. MOSTRAR AVISOS
         st.subheader("📌 Reservas Especiales")
         if avisos_col_d:
             texto_avisos = "\n".join([f"- {aviso}" for aviso in avisos_col_d])
@@ -137,7 +149,8 @@ try:
         # 3. ACORDEÓN PARA CLASES REGULARES
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
-                cols_mostrar = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
+                # ¡Agregamos 'BLOQUE' a la tabla para que se vea el "(4-2)"!
+                cols_mostrar = ['BLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
                 cols_finales = [c for c in cols_mostrar if c in ocu.columns]
                 st.dataframe(ocu[cols_finales], hide_index=True, use_container_width=True)
             else:
@@ -145,7 +158,6 @@ try:
 
     # --- PESTAÑA 2: BÚSQUEDA ---
     with tab2:
-        # Ponemos el Tipo y la Selección en columnas
         col_tipo, col_sel = st.columns(2)
         
         with col_tipo:
@@ -161,7 +173,11 @@ try:
         
         st.header(f"Agenda de: {sel}")
         res_busqueda = df_ocupados[df_ocupados[col_filtro] == sel]
-        st.dataframe(res_busqueda, hide_index=True, use_container_width=True)
+        
+        # Aquí también organizamos las columnas para que sea más fácil de leer
+        cols_busqueda = ['DIA', 'BLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES']
+        cols_b_finales = [c for c in cols_busqueda if c in res_busqueda.columns]
+        st.dataframe(res_busqueda[cols_b_finales], hide_index=True, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error técnico: {e}")
