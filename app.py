@@ -42,7 +42,6 @@ def cargar_datos():
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     
     avisos_col_d = []
-    
     col_avisos = -1
     for col in range(len(df_config.columns)):
         col_data = df_config.iloc[:, col].fillna("").astype(str)
@@ -72,6 +71,10 @@ def cargar_datos():
 
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
+        # Crear orden lógico para los días
+        orden_dias = {"LUNES": 1, "MARTES": 2, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
+        df_o['ORDEN_DIA'] = df_o['DIA'].map(orden_dias)
+
     if 'BLOQUE' in df_o.columns:
         df_o['BLOQUE'] = df_o['BLOQUE'].apply(limpiar_bloque)
     if 'ESPACIOS' in df_o.columns:
@@ -92,14 +95,14 @@ try:
         st.cache_data.clear()
         st.rerun()
 
-    # --- TRES PESTAÑAS ---
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
     # --- PESTAÑA 1: HORARIO ---
     with tab1:
         col_dia, col_bloque = st.columns(2)
-        dias = [d for d in df_ocupados['DIA'].dropna().unique() if d != "NAN"]
-        dia_elegido = col_dia.selectbox("📅 Día:", dias)
+        # Ordenamos los días seleccionables según el ORDEN_DIA que creamos
+        dias_disponibles = df_ocupados.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
+        dia_elegido = col_dia.selectbox("📅 Día:", dias_disponibles)
         
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
@@ -132,7 +135,7 @@ try:
         sel = st.selectbox(f"Selecciona {tipo}:", lista)
         st.divider()
         st.header(f"Agenda de: {sel}")
-        res = df_ocupados[df_ocupados[col_filtro] == sel]
+        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'BLOQUE'])
         cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
         st.dataframe(res[cols], hide_index=True, use_container_width=True)
 
@@ -141,7 +144,7 @@ try:
         espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
         st.divider()
         st.header(f"Agenda de: {espacio_sel}")
-        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(by=['DIA', 'BLOQUE'])
+        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'BLOQUE'])
         cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
         st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
 
