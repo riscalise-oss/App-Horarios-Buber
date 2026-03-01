@@ -8,14 +8,14 @@ st.title("🏫 Buscador Rápido para Asistentes")
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=447717872&single=true&output=csv"
 
-@st.cache_data
+# --- MAGIA AQUÍ: ttl=60 obliga a renovar los datos cada 60 segundos ---
+@st.cache_data(ttl=60)
 def cargar_datos():
     # 1. LEER ASIGNACIONES REGULARES
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
     # 2. LEER TU HOJA DE RESERVAS (Modo Rastreador Inteligente)
-    # Usamos engine='python' para que no se trabe con tus columnas separadoras negras
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     
     avisos_col_d = []
@@ -29,11 +29,9 @@ def cargar_datos():
             break
             
     if col_avisos != -1:
-        # Si encuentra el título, extraemos todo lo que hay debajo
         avisos_brutos = df_config.iloc[:, col_avisos].fillna("").astype(str).tolist()
         for a in avisos_brutos:
             texto = a.strip()
-            # Filtramos celdas vacías y el propio título
             if texto and "ESPACIOS BLOQUEADOS" not in texto.upper() and texto.upper() != "NAN":
                 if texto not in avisos_col_d:
                     avisos_col_d.append(texto)
@@ -70,6 +68,13 @@ try:
 
     # --- MENÚ LATERAL ---
     st.sidebar.header("⚙️ Opciones")
+    
+    # --- NUEVO: BOTÓN DE ACTUALIZACIÓN MANUAL ---
+    if st.sidebar.button("🔄 Actualizar Datos Ahora"):
+        st.cache_data.clear()
+        st.rerun() # Esto recarga la página inmediatamente
+        
+    st.sidebar.divider()
     modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "🧑‍🏫 Buscar Docente/Curso"])
     st.sidebar.divider()
 
@@ -87,7 +92,7 @@ try:
         st.subheader("📌 Reservas Especiales (Avisos)")
         if avisos_col_d:
             for aviso in avisos_col_d:
-                st.warning(f"{aviso}") # st.warning lo pondrá en una caja amarilla para que resalte
+                st.warning(f"{aviso}")
         else:
             st.write("No hay reservas especiales anotadas.")
 
