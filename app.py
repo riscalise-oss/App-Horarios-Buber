@@ -8,14 +8,13 @@ st.title("🏫 Buscador Rápido para Asistentes")
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=447717872&single=true&output=csv"
 
-# --- MAGIA AQUÍ: ttl=60 obliga a renovar los datos cada 60 segundos ---
 @st.cache_data(ttl=60)
 def cargar_datos():
     # 1. LEER ASIGNACIONES REGULARES
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
-    # 2. LEER TU HOJA DE RESERVAS (Modo Rastreador Inteligente)
+    # 2. LEER TU HOJA DE RESERVAS
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     
     avisos_col_d = []
@@ -69,10 +68,9 @@ try:
     # --- MENÚ LATERAL ---
     st.sidebar.header("⚙️ Opciones")
     
-    # --- NUEVO: BOTÓN DE ACTUALIZACIÓN MANUAL ---
     if st.sidebar.button("🔄 Actualizar Datos Ahora"):
         st.cache_data.clear()
-        st.rerun() # Esto recarga la página inmediatamente
+        st.rerun()
         
     st.sidebar.divider()
     modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "🧑‍🏫 Buscar Docente/Curso"])
@@ -88,26 +86,28 @@ try:
 
         st.header(f"Resultados: {dia_elegido} - Bloque {bloque_elegido}")
 
-        # --- AVISOS DE LA COLUMNA D ---
-        st.subheader("📌 Reservas Especiales (Avisos)")
-        if avisos_col_d:
-            for aviso in avisos_col_d:
-                st.warning(f"{aviso}")
-        else:
-            st.write("No hay reservas especiales anotadas.")
-
-        # --- LÓGICA DE ESPACIOS LIBRES ---
+        # PREPARAMOS LA LÓGICA DE ESPACIOS LIBRES PRIMERO
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
         lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
         espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
 
-        st.subheader("🟢 Espacios sin clases regulares")
+        # 1. MOSTRAR ESPACIOS LIBRES ARRIBA DE TODO
+        st.subheader("🟢 Espacios Totalmente Libres")
         if espacios_libres:
             st.success(" ✅ " + " | ✅ ".join(sorted(espacios_libres)))
         else:
             st.warning("No hay ningún espacio libre en este horario.")
 
-        # --- CLASES REGULARES ---
+        # 2. MOSTRAR AVISOS DE FORMA COMPACTA (Una sola caja)
+        st.subheader("📌 Reservas Especiales (Avisos)")
+        if avisos_col_d:
+            # Unimos todos los avisos con un salto de línea para que queden en una sola caja
+            texto_avisos = "\n".join([f"- {aviso}" for aviso in avisos_col_d])
+            st.warning(texto_avisos)
+        else:
+            st.info("No hay reservas especiales anotadas.")
+
+        # 3. MOSTRAR CLASES REGULARES AL FINAL
         st.subheader("🔴 Clases Regulares")
         if not ocu.empty:
             cols_mostrar = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
