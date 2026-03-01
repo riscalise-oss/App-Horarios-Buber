@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Buscador de Espacios", layout="wide")
+st.set_page_config(page_title="Buscador de Ámbitos", layout="wide")
 st.title("🏫 Buscador de Ámbitos")
 
 # --- 1. TUS ENLACES ---
@@ -37,4 +37,77 @@ def cargar_datos():
     else:
         # ESTRATEGIA B: Si no encuentra el título, buscamos los ⚠️ en TODA la hoja
         for col in range(len(df_config.columns)):
-            for val in df_config.iloc
+            for val in df_config.iloc[:, col].fillna("").astype(str):
+                val_str = str(val).strip()
+                if "⚠️" in val_str and val_str not in avisos_col_d:
+                    avisos_col_d.append(val_str)
+
+    def limpiar_bloque(val):
+        val_str = str(val).strip().upper()
+        if val_str.endswith('.0'):
+            return val_str[:-2]
+        return val_str
+
+    # LIMPIEZA DE DATOS REGULARES
+    if 'DIA' in df_o.columns:
+        df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
+    if 'BLOQUE' in df_o.columns:
+        df_o['BLOQUE'] = df_o['BLOQUE'].apply(limpiar_bloque)
+    if 'ESPACIOS' in df_o.columns:
+        df_o['ESPACIOS'] = df_o['ESPACIOS'].astype(str).str.strip().str.upper()
+
+    # LISTA DE ESPACIOS TOTALES
+    espacios = df_o['ESPACIOS'].dropna().unique().tolist()
+    espacios_totales = sorted([e for e in espacios if e != "NAN" and e != ""])
+    
+    return df_o, avisos_col_d, espacios_totales
+
+try:
+    df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
+
+    # --- MENÚ LATERAL ---
+    st.sidebar.header("⚙️ Opciones")
+    
+    if st.sidebar.button("🔄 Actualizar Datos Ahora"):
+        st.cache_data.clear()
+        st.rerun()
+        
+    st.sidebar.divider()
+    modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "🧑‍🏫 Buscar Docente/Curso"])
+    st.sidebar.divider()
+
+    # --- MODO 1: HORARIO ---
+    if modo == "🕰️ Buscar por Horario":
+        dias = [d for d in df_ocupados['DIA'].dropna().unique() if d != "NAN"]
+        dia_elegido = st.sidebar.selectbox("📅 Día:", dias)
+        
+        bloques = [b for b in df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique() if b != "NAN"]
+        bloque_elegido = st.sidebar.selectbox("⏰ Bloque:", bloques)
+
+        st.header(f"Resultados: {dia_elegido} - Bloque {bloque_elegido}")
+
+        # PREPARAMOS LA LÓGICA DE ESPACIOS LIBRES PRIMERO
+        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
+        lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
+        espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
+
+        # 1. MOSTRAR ESPACIOS LIBRES ARRIBA DE TODO
+        st.subheader("🟢 Ámbitos Totalmente Libres")
+        if espacios_libres:
+            st.success(" ✅ " + " | ✅ ".join(sorted(espacios_libres)))
+        else:
+            st.warning("No hay ningún ámbito libre en este horario.")
+
+        # 2. MOSTRAR AVISOS DE FORMA COMPACTA (Una sola caja)
+        st.subheader("📌 Reservas Especiales (Avisos)")
+        if avisos_col_d:
+            texto_avisos = "\n".join([f"- {aviso}" for aviso in avisos_col_d])
+            st.warning(texto_avisos)
+        else:
+            st.info("No hay reservas especiales anotadas.")
+
+        # 3. MOSTRAR CLASES REGULARES AL FINAL
+        st.subheader("🔴 Clases Regulares")
+        if not ocu.empty:
+            cols_mostrar = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
+            cols_finales = [c for
