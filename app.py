@@ -1,8 +1,23 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Buscador de Ámbitos", layout="wide")
-st.title("🏫 Buscador de Ámbitos")
+# --- CONFIGURACIÓN DE PÁGINA ---
+# Aquí también ponemos el logo para que aparezca en la pestaña del navegador web
+st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
+
+# --- TÍTULO CON LOGO ---
+# Usamos columnas para poner el logo a la izquierda y el texto a la derecha
+col1, col2 = st.columns([1, 15])
+with col1:
+    try:
+        # Intenta cargar la imagen. El ancho se puede ajustar (ej. 70, 80, 100)
+        st.image("logo.png", width=75)
+    except Exception:
+        # Si por alguna razón la imagen aún no sube a GitHub, muestra este escudo temporal para no romper la app
+        st.title("🛡️")
+with col2:
+    st.title("Buscador de Ámbitos")
+
 
 # --- 1. TUS ENLACES ---
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
@@ -73,7 +88,6 @@ try:
         st.rerun()
         
     st.sidebar.divider()
-    # ¡AQUÍ ESTÁ EL CAMBIO DEL EMOJI!
     modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso"])
     st.sidebar.divider()
 
