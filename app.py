@@ -110,4 +110,4 @@ try:
         st.subheader("🔴 Clases Regulares")
         if not ocu.empty:
             cols_mostrar = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
-            cols_finales = [c for
+            cols_finales = [c for ]
