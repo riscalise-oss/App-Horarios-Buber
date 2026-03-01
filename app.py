@@ -5,7 +5,7 @@ st.set_page_config(page_title="Buscador de Espacios", layout="wide")
 
 st.title("🏫 Buscador Rápido para Asistentes")
 
-# --- 1. TUS ENLACES (PEGA AQUÍ LOS ENLACES DE TU ARCHIVO ORIGINAL) ---
+# --- 1. TUS ENLACES (¡PEGA AQUÍ LOS ENLACES DE TU ARCHIVO ORIGINAL!) ---
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTj5se3brxjtH9uEkXNlt03sha1MqpIwWYCbMH29Sz-Bsxz8R1PHcuPPJ-ERLQuEuC7wPP8fzIkOBVG/pub?gid=447717872&single=true&output=csv"
 LINK_CONFIG = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=0&single=true&output=csv"
@@ -69,12 +69,14 @@ try:
         else:
             st.warning("No hay ningún espacio libre en este horario.")
 
+        # RESERVAS HECHAS
         st.subheader("⚠️ 2. Reservas Especiales")
         if not reservas_filtradas.empty:
             st.dataframe(reservas_filtradas, hide_index=True, use_container_width=True)
         else:
             st.info("No hay reservas especiales para este horario.")
 
+        # CLASES REGULARES
         st.subheader("🔴 3. Clases Regulares (Ocupados)")
         if not ocupados_filtrado.empty:
             columnas_utiles = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
