@@ -4,7 +4,15 @@ import base64
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
-
+# --- OCULTAR MENÚ SUPERIOR Y GITHUB ---
+ocultar_menu = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+"""
+st.markdown(ocultar_menu, unsafe_allow_html=True)
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
