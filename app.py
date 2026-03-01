@@ -73,7 +73,8 @@ try:
         st.rerun()
         
     st.sidebar.divider()
-    modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "🧑‍🏫 Buscar Docente/Curso"])
+    # ¡AQUÍ ESTÁ EL CAMBIO DEL EMOJI!
+    modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso"])
     st.sidebar.divider()
 
     # --- MODO 1: HORARIO ---
@@ -86,7 +87,7 @@ try:
 
         st.header(f"{dia_elegido} - Bloque {bloque_elegido}")
 
-        # --- NUEVO: HORARIOS EXACTOS ---
+        # --- HORARIOS EXACTOS ---
         horarios = {
             "1": "7:40 a 9:00",
             "2": "9:10 a 10:30",
