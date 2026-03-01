@@ -1,22 +1,27 @@
 import streamlit as st
 import pandas as pd
+import base64
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-# Aquí también ponemos el logo para que aparezca en la pestaña del navegador web
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- TÍTULO CON LOGO ---
-# Usamos columnas para poner el logo a la izquierda y el texto a la derecha
-col1, col2 = st.columns([1, 15])
-with col1:
-    try:
-        # Intenta cargar la imagen. El ancho se puede ajustar (ej. 70, 80, 100)
-        st.image("logo.png", width=75)
-    except Exception:
-        # Si por alguna razón la imagen aún no sube a GitHub, muestra este escudo temporal para no romper la app
-        st.title("🛡️")
-with col2:
-    st.title("Buscador de Ámbitos")
+# --- TÍTULO CON LOGO (CORREGIDO PARA CELULARES) ---
+try:
+    # Leemos la imagen y la convertimos a un formato que el HTML pueda entender
+    with open("logo.png", "rb") as f:
+        data = f.read()
+    img_base64 = base64.b64encode(data).decode()
+    
+    # Usamos diseño web (Flexbox) para obligar a que el logo y el texto estén en la misma línea y centrados
+    st.markdown(f"""
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <img src="data:image/png;base64,{img_base64}" width="70" style="margin-right: 15px; border-radius: 8px;">
+            <h1 style="margin: 0; padding: 0;">Buscador de Ámbitos</h1>
+        </div>
+    """, unsafe_allow_html=True)
+except Exception:
+    # Si por alguna razón falla el logo, mostramos esto de respaldo
+    st.title("🛡️ Buscador de Ámbitos")
 
 
 # --- 1. TUS ENLACES ---
