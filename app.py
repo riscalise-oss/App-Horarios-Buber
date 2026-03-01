@@ -5,47 +5,47 @@ st.set_page_config(page_title="Buscador de Espacios", layout="wide")
 st.title("🏫 Buscador Rápido para Asistentes")
 
 # --- 1. TUS ENLACES ---
-LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
+LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=cs"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=0&single=true&output=csv"
 
 @st.cache_data
 def cargar_datos():
-    # 1. LEER ARCHIVOS
+    # 1. LEER ASIGNACIONES REGULARES
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
-    df_r_raw = pd.read_csv(LINK_RESERVAS, header=None)
-    df_r = df_r_raw.iloc[2:, 5:10].copy()
-    df_r.columns = ['FECHA', 'DIA', 'BLOQUE', 'ESPACIO', 'MOTIVO']
-    df_r = df_r.dropna(how='all')
+    # 2. LEER TU COLUMNA 'D' (Reservas Especiales)
+    # Leemos sin encabezados para asegurar que capturamos la columna exacta
+    df_config = pd.read_csv(LINK_RESERVAS, header=None)
+    # La Columna D es la número 3 (A=0, B=1, C=2, D=3)
+    columna_d_bruta = df_config.iloc[:, 3].dropna().astype(str).tolist()
+    # Limpiamos celdas vacías o el título de la columna para que quede prolijo
+    avisos_col_d = [a.strip() for a in columna_d_bruta if a.strip() != "" and a.strip().upper() not in ["RESERVAS", "RESERVA", "RESERVAS ESPECIALES"]]
 
-    # 2. LIMPIEZA PROFUNDA DE DATOS (El arreglo para que no muestre aulas libres por error)
-    # Convertimos todo el contenido a texto, mayúsculas y borramos espacios invisibles
+    def limpiar_bloque(val):
+        val_str = str(val).strip().upper()
+        if val_str.endswith('.0'):
+            return val_str[:-2]
+        return val_str
+
+    # LIMPIEZA DE DATOS REGULARES
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
     if 'BLOQUE' in df_o.columns:
-        df_o['BLOQUE'] = df_o['BLOQUE'].astype(str).str.strip().str.upper()
+        df_o['BLOQUE'] = df_o['BLOQUE'].apply(limpiar_bloque)
     if 'ESPACIOS' in df_o.columns:
         df_o['ESPACIOS'] = df_o['ESPACIOS'].astype(str).str.strip().str.upper()
 
-    if 'DIA' in df_r.columns:
-        df_r['DIA'] = df_r['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
-    if 'BLOQUE' in df_r.columns:
-        df_r['BLOQUE'] = df_r['BLOQUE'].astype(str).str.strip().str.upper()
-    if 'ESPACIO' in df_r.columns:
-        df_r['ESPACIO'] = df_r['ESPACIO'].astype(str).str.strip().str.upper()
-
-    # 3. LISTA DE ESPACIOS TOTALES
-    # Sacamos la lista maestra limpiando los valores nulos
+    # LISTA DE ESPACIOS TOTALES
     espacios = df_o['ESPACIOS'].dropna().unique().tolist()
     espacios_totales = sorted([e for e in espacios if e != "NAN" and e != ""])
     
-    return df_o, df_r, espacios_totales
+    return df_o, avisos_col_d, espacios_totales
 
 try:
-    df_ocupados, df_reservas, todos_los_espacios = cargar_datos()
+    df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
 
-    # --- 3. MENÚ LATERAL ---
+    # --- MENÚ LATERAL ---
     st.sidebar.header("⚙️ Opciones")
     modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "🧑‍🏫 Buscar Docente/Curso"])
     st.sidebar.divider()
@@ -60,30 +60,27 @@ try:
 
         st.header(f"Resultados: {dia_elegido} - Bloque {bloque_elegido}")
 
-        # Filtros exactos
+        # --- AVISOS DE LA COLUMNA D ---
+        st.subheader("📌 Reservas Especiales (Avisos)")
+        if avisos_col_d:
+            for aviso in avisos_col_d:
+                st.info(f"📝 {aviso}")
+        else:
+            st.write("No hay reservas especiales anotadas.")
+
+        # --- LÓGICA DE ESPACIOS LIBRES (Solo resta los regulares) ---
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == bloque_elegido)]
-        res = df_reservas[(df_reservas['DIA'] == dia_elegido) & (df_reservas['BLOQUE'] == bloque_elegido)]
-
-        # Lógica de Aulas Libres y Ocupadas
         lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
-        lista_reservados = res['ESPACIO'].dropna().tolist() if 'ESPACIO' in res.columns else []
-        espacios_en_uso = set(lista_ocupados + lista_reservados)
-        
-        espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in espacios_en_uso]
+        espacios_libres = [espacio for espacio in todos_los_espacios if espacio not in lista_ocupados]
 
-        st.subheader("🟢 1. Espacios Totalmente Libres")
+        st.subheader("🟢 Espacios sin clases regulares")
         if espacios_libres:
             st.success(" ✅ " + " | ✅ ".join(sorted(espacios_libres)))
         else:
             st.warning("No hay ningún espacio libre en este horario.")
 
-        st.subheader("⚠️ 2. Reservas Especiales")
-        if not res.empty:
-            st.dataframe(res, hide_index=True, use_container_width=True)
-        else:
-            st.info("No hay reservas especiales para este horario.")
-
-        st.subheader("🔴 3. Clases Regulares")
+        # --- CLASES REGULARES ---
+        st.subheader("🔴 Clases Regulares")
         if not ocu.empty:
             cols_mostrar = ['ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA']
             cols_finales = [c for c in cols_mostrar if c in ocu.columns]
