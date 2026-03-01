@@ -180,4 +180,10 @@ try:
         st.header(f"Agenda de: {sel}")
         res_busqueda = df_ocupados[df_ocupados[col_filtro] == sel]
         
-        # --- AQUÍ VOLVIMOS A SUMAR LA COLUMNA SUBBLOQUE
+        # --- AQUÍ VOLVIMOS A SUMAR LA COLUMNA SUBBLOQUE ---
+        cols_busqueda = ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES']
+        cols_b_finales = [c for c in cols_busqueda if c in res_busqueda.columns]
+        st.dataframe(res_busqueda[cols_b_finales], hide_index=True, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
