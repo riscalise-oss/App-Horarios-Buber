@@ -5,7 +5,7 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- TÍTULO CON LOGO (CORREGIDO PARA CELULARES) ---
+# --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
         data = f.read()
@@ -75,25 +75,30 @@ def cargar_datos():
 try:
     df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
 
-    # --- MENÚ LATERAL ---
+    # --- MENÚ LATERAL (AHORA MÁS LIMPIO) ---
     st.sidebar.header("⚙️ Opciones")
-    
     if st.sidebar.button("🔄 Actualizar Datos Ahora"):
         st.cache_data.clear()
         st.rerun()
-        
-    st.sidebar.divider()
-    modo = st.sidebar.radio("Selecciona modo:", ["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso"])
-    st.sidebar.divider()
 
-    # --- MODO 1: HORARIO ---
-    if modo == "🕰️ Buscar por Horario":
+    # --- PESTAÑAS PRINCIPALES ---
+    tab1, tab2 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso"])
+
+    # --- PESTAÑA 1: HORARIO ---
+    with tab1:
+        # Ponemos Día y Bloque en dos columnas para que no ocupe tanto espacio hacia abajo
+        col_dia, col_bloque = st.columns(2)
+        
         dias = [d for d in df_ocupados['DIA'].dropna().unique() if d != "NAN"]
-        dia_elegido = st.sidebar.selectbox("📅 Día:", dias)
+        with col_dia:
+            dia_elegido = st.selectbox("📅 Día:", dias)
         
         bloques = [b for b in df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique() if b != "NAN"]
-        bloque_elegido = st.sidebar.selectbox("⏰ Bloque:", bloques)
+        with col_bloque:
+            bloque_elegido = st.selectbox("⏰ Bloque:", bloques)
 
+        st.divider() # Una línea para separar los filtros de los resultados
+        
         st.header(f"{dia_elegido} - Bloque {bloque_elegido}")
 
         # --- HORARIOS EXACTOS ---
@@ -138,15 +143,24 @@ try:
             else:
                 st.info("No hay clases regulares registradas en este bloque.")
 
-    # --- MODO 2: BÚSQUEDA ---
-    else:
-        tipo = st.sidebar.radio("Buscar por:", ["Docente", "Curso"])
-        col = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
-        lista = sorted([x for x in df_ocupados[col].dropna().unique() if str(x).upper() != "NAN"])
-        sel = st.sidebar.selectbox(f"Selecciona {tipo}:", lista)
+    # --- PESTAÑA 2: BÚSQUEDA ---
+    with tab2:
+        # Ponemos el Tipo y la Selección en columnas
+        col_tipo, col_sel = st.columns(2)
+        
+        with col_tipo:
+            tipo = st.radio("Buscar por:", ["Docente", "Curso"], horizontal=True)
+        
+        col_filtro = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
+        lista = sorted([x for x in df_ocupados[col_filtro].dropna().unique() if str(x).upper() != "NAN"])
+        
+        with col_sel:
+            sel = st.selectbox(f"Selecciona {tipo}:", lista)
+        
+        st.divider()
         
         st.header(f"Agenda de: {sel}")
-        res_busqueda = df_ocupados[df_ocupados[col] == sel]
+        res_busqueda = df_ocupados[df_ocupados[col_filtro] == sel]
         st.dataframe(res_busqueda, hide_index=True, use_container_width=True)
 
 except Exception as e:
