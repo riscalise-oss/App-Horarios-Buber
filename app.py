@@ -5,15 +5,20 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- OCULTAR SOLO ELEMENTOS NO CRÍTICOS ---
-ocultar_menu = """
+# --- CSS MÍNIMO Y EFICIENTE ---
+st.markdown("""
     <style>
-    /* Ocultamos lo que no interfiere con el motor de la app */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* Ocultamos el header nativo de forma directa */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    /* Ocultamos el menú principal (hamburguesa) */
+    #MainMenu {
+        visibility: hidden !important;
+    }
     </style>
-"""
-st.markdown(ocultar_menu, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
