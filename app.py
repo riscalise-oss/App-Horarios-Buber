@@ -5,28 +5,32 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- OCULTAR MENÚ, ENCABEZADO Y TODOS LOS LOGOS DE STREAMLIT ---
+# --- OCULTAR MENÚ, ENCABEZADO Y LOGOS FLOTANTES DE STREAMLIT CLOUD ---
 ocultar_menu = """
     <style>
-    /* Ocultar menú principal y encabezado */
-    #MainMenu {visibility: hidden !important;}
+    /* Ocultar encabezado y menú principal */
+    #MainMenu {visibility: hidden;}
     header {visibility: hidden !important;}
     [data-testid="stHeader"] {display: none !important;}
     
-    /* Ocultar pie de página nativo y logos de Streamlit */
+    /* Ocultar pie de página nativo */
     footer {visibility: hidden !important; display: none !important;}
     [data-testid="stFooter"] {display: none !important;}
     
-    /* Ocultar botones superiores (Deploy, logo de GitHub, etc.) */
-    .stDeployButton {display: none !important;}
+    /* Ocultar botones flotantes de Streamlit Cloud (esquina inferior derecha) */
     [data-testid="stToolbar"] {display: none !important;}
+    .stDeployButton {display: none !important;}
     
-    /* Ocultar cualquier insignia flotante de Streamlit Cloud */
+    /* Ocultar la insignia roja y el menú azul usando prefijos de clase y enlaces */
+    div[class^="viewerBadge"] {display: none !important;}
+    div[class*="viewerBadge"] {display: none !important;}
     a[href^="https://streamlit.io/cloud"] {display: none !important;}
+    
+    /* Ocultar el widget de estado */
+    [data-testid="stStatusWidget"] {display: none !important;}
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
-
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
