@@ -74,7 +74,7 @@ try:
     
     docente_elegido = col1.selectbox("👤 Docente:", lista_docentes)
     
-    dias_disponibles = df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
+    dias_disponibles = [dia for dia in df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist() if dia not in ["NAN", ""]]
     dia_elegido = col2.selectbox("📅 Día:", dias_disponibles)
 
     st.divider()
