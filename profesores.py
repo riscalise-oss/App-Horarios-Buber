@@ -34,28 +34,40 @@ LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzj
 
 @st.cache_data(ttl=60)
 def cargar_datos():
+    # Leemos el CSV
     df = pd.read_csv(LINK_OCUPADOS)
+    
+    # Estandarizamos los nombres de las columnas
     df.columns = [str(c).upper().strip().replace('Í', 'I') for c in df.columns]
     
+    # Limpieza de DIA
     if 'DIA' in df.columns:
         df['DIA'] = df['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
-        orden_dias = {"LUNES": 1, "MARTES": 2, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
+        orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "JUEVES": 4, "VIERNES": 5}
         df['ORDEN_DIA'] = df['DIA'].map(orden_dias)
 
+    # Limpieza de BLOQUE
     if 'BLOQUE' in df.columns:
         df['BLOQUE'] = df['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
-        # Creamos una columna numérica oculta para ordenar cronológicamente
         df['ORDEN_BLOQUE'] = pd.to_numeric(df['BLOQUE'], errors='coerce').fillna(99)
         
+    # Limpieza de DOCENTES
     if 'DOCENTES' in df.columns:
         df['DOCENTES'] = df['DOCENTES'].astype(str).str.strip().str.upper()
         
+    # Limpieza de ESPACIOS
     if 'ESPACIOS' in df.columns:
         df['ESPACIOS'] = df['ESPACIOS'].astype(str).str.strip().str.upper()
+
+    # --- FILTRO ANTI-NAN DE RAÍZ ---
+    # Eliminamos cualquier fila donde el DOCENTE o el DIA sean "NAN" o estén vacíos
+    df = df[~df['DIA'].isin(["NAN", "NAN ", "", "NAT", "NONE"])]
+    df = df[~df['DOCENTES'].isin(["NAN", "NAN ", "", "NAT", "NONE"])]
         
     return df
 
 try:
+    # Cargamos los datos limpios
     df = cargar_datos()
     
     # --- MENÚ LATERAL ---
@@ -67,19 +79,21 @@ try:
     # --- LÓGICA DE INTERFAZ ---
     st.subheader("🔍 Buscador de Clases Asignadas")
     
-    lista_docentes = sorted([d for d in df['DOCENTES'].unique() if d not in ["NAN", ""]])
+    # Listas limpias para los selectores
+    lista_docentes = sorted(df['DOCENTES'].unique().tolist())
     
-    # Ahora usamos 2 columnas en lugar de 3 para que quede más limpio
+    # Usamos 2 columnas
     col1, col2 = st.columns(2)
     
     docente_elegido = col1.selectbox("👤 Docente:", lista_docentes)
     
-    dias_disponibles = [dia for dia in df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist() if dia not in ["NAN", ""]]
+    # Días disponibles ordenados correctamente
+    dias_disponibles = df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
     dia_elegido = col2.selectbox("📅 Día:", dias_disponibles)
 
     st.divider()
 
-    # --- FILTRADO DE DATOS (Sin el selector de Bloque) ---
+    # --- FILTRADO DE DATOS ---
     filtro = (df['DOCENTES'] == docente_elegido) & (df['DIA'] == dia_elegido)
     # Ordenamos el resultado por el número de bloque para que aparezca cronológicamente
     resultado = df[filtro].sort_values('ORDEN_BLOQUE')
