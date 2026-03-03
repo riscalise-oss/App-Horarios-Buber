@@ -34,35 +34,36 @@ LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzj
 
 @st.cache_data(ttl=60)
 def cargar_datos():
-    # Leemos el CSV
+    # 1. Leemos el CSV
     df = pd.read_csv(LINK_OCUPADOS)
     
-    # Estandarizamos los nombres de las columnas
+    # 2. Estandarizamos los nombres de las columnas
     df.columns = [str(c).upper().strip().replace('Í', 'I') for c in df.columns]
     
-    # Limpieza de DIA
+    # 3. LA SOLUCIÓN: Eliminamos los vacíos (nulos reales) ANTES de convertir a texto
+    columnas_clave = [col for col in ['DOCENTES', 'DIA'] if col in df.columns]
+    if columnas_clave:
+        df = df.dropna(subset=columnas_clave)
+    
+    # 4. Ahora sí, convertimos a texto limpio y ordenamos
     if 'DIA' in df.columns:
         df['DIA'] = df['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
         orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "JUEVES": 4, "VIERNES": 5}
         df['ORDEN_DIA'] = df['DIA'].map(orden_dias)
 
-    # Limpieza de BLOQUE
     if 'BLOQUE' in df.columns:
         df['BLOQUE'] = df['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
         df['ORDEN_BLOQUE'] = pd.to_numeric(df['BLOQUE'], errors='coerce').fillna(99)
         
-    # Limpieza de DOCENTES
     if 'DOCENTES' in df.columns:
         df['DOCENTES'] = df['DOCENTES'].astype(str).str.strip().str.upper()
         
-    # Limpieza de ESPACIOS
     if 'ESPACIOS' in df.columns:
         df['ESPACIOS'] = df['ESPACIOS'].astype(str).str.strip().str.upper()
 
-    # --- FILTRO ANTI-NAN DE RAÍZ ---
-    # Eliminamos cualquier fila donde el DOCENTE o el DIA sean "NAN" o estén vacíos
-    df = df[~df['DIA'].isin(["NAN", "NAN ", "", "NAT", "NONE"])]
-    df = df[~df['DOCENTES'].isin(["NAN", "NAN ", "", "NAT", "NONE"])]
+    # Filtro final de seguridad por si quedó algún texto sucio
+    df = df[~df['DIA'].isin(["NAN", "", "NAT"])]
+    df = df[~df['DOCENTES'].isin(["NAN", "", "NAT"])]
         
     return df
 
