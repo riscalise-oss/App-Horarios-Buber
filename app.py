@@ -5,13 +5,24 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- OCULTAR MENÚ Y PIE DE PÁGINA STREAMLIT ---
+# --- OCULTAR MENÚ, ENCABEZADO Y TODOS LOS LOGOS DE STREAMLIT ---
 ocultar_menu = """
     <style>
-    #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
-    footer {visibility: hidden !important;}
-    .stApp > header {display: none !important;}
+    /* Ocultar menú principal y encabezado */
+    #MainMenu {visibility: hidden !important;}
+    header {visibility: hidden !important;}
+    [data-testid="stHeader"] {display: none !important;}
+    
+    /* Ocultar pie de página nativo y logos de Streamlit */
+    footer {visibility: hidden !important; display: none !important;}
+    [data-testid="stFooter"] {display: none !important;}
+    
+    /* Ocultar botones superiores (Deploy, logo de GitHub, etc.) */
+    .stDeployButton {display: none !important;}
+    [data-testid="stToolbar"] {display: none !important;}
+    
+    /* Ocultar cualquier insignia flotante de Streamlit Cloud */
+    a[href^="https://streamlit.io/cloud"] {display: none !important;}
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
