@@ -5,26 +5,27 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- OCULTAR MENÚ Y ELEMENTOS DECORATIVOS (VISTA LIMPIA) ---
+# --- CSS MÍNIMO: SÓLO LO QUE NO ROMPE NADA ---
 ocultar_menu = """
     <style>
-    /* Oculta el icono de menú (hamburguesa) en la parte superior */
-    [data-testid="stHeader"] .stButton, 
-    [data-testid="stHeader"] button {
+    /* Oculta el botón de menú de hamburguesa arriba a la izquierda */
+    button[kind="header"] {
         display: none !important;
     }
     
-    /* Oculta la barra de herramientas superior (Deploy, GitHub, etc) */
+    /* Oculta la barra de herramientas superior (la que tiene el logo de GitHub/Streamlit) */
     [data-testid="stToolbar"] {
         display: none !important;
     }
     
-    /* Oculta el logo de Streamlit en el footer, manteniendo tu firma intacta */
-    #MainMenu {visibility: hidden !important;}
-    footer {visibility: hidden !important;}
+    /* Oculta el footer de Streamlit */
+    footer {
+        visibility: hidden !important;
+    }
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
+
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
