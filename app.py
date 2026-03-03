@@ -5,23 +5,16 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- CSS MÍNIMO: SÓLO LO QUE NO ROMPE NADA ---
+# --- CSS LIMPIO Y SEGURO ---
+# Solo ocultamos el pie de página nativo. 
+# No tocamos el encabezado (header) para proteger tu botón de refrescar.
 ocultar_menu = """
     <style>
-    /* Oculta el botón de menú de hamburguesa arriba a la izquierda */
-    button[kind="header"] {
-        display: none !important;
-    }
+    /* Oculta solo el "Made with Streamlit" */
+    footer {visibility: hidden !important;}
     
-    /* Oculta la barra de herramientas superior (la que tiene el logo de GitHub/Streamlit) */
-    [data-testid="stToolbar"] {
-        display: none !important;
-    }
-    
-    /* Oculta el footer de Streamlit */
-    footer {
-        visibility: hidden !important;
-    }
+    /* Oculta el icono de menú de la izquierda, si no lo necesitas */
+    #MainMenu {visibility: hidden !important;}
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
