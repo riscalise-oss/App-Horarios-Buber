@@ -5,12 +5,11 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- OCULTAR MENÚ Y PIE DE PÁGINA (VERSIÓN SEGURA) ---
+# --- OCULTAR SOLO ELEMENTOS NO CRÍTICOS ---
 ocultar_menu = """
     <style>
-    /* Ocultar solo el menú de hamburguesa y el texto del pie de página nativo */
+    /* Ocultamos lo que no interfiere con el motor de la app */
     #MainMenu {visibility: hidden;}
-    header {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
 """
