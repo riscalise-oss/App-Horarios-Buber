@@ -5,12 +5,13 @@ import base64
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
-# --- OCULTAR MENÚ SUPERIOR Y GITHUB ---
+# --- OCULTAR MENÚ Y PIE DE PÁGINA STREAMLIT ---
 ocultar_menu = """
     <style>
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
-    footer {visibility: hidden;}
+    footer {visibility: hidden !important;}
+    .stApp > header {display: none !important;}
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
@@ -36,54 +37,53 @@ LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzj
 
 @st.cache_data(ttl=60)
 def cargar_datos():
+    # Carga de datos
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     
+    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos --
     avisos_col_d = []
-    col_avisos = -1
-    for col in range(len(df_config.columns)):
-        col_data = df_config.iloc[:, col].fillna("").astype(str)
-        if col_data.str.contains("Espacios Bloqueados", case=False, na=False).any():
-            col_avisos = col
-            break
-            
-    if col_avisos != -1:
-        avisos_brutos = df_config.iloc[:, col_avisos].fillna("").astype(str).tolist()
-        for a in avisos_brutos:
-            texto = a.strip()
-            if texto and "ESPACIOS BLOQUEADOS" not in texto.upper() and texto.upper() != "NAN":
-                if texto not in avisos_col_d:
-                    avisos_col_d.append(texto)
+    
+    # Buscar "Espacios Bloqueados" en todo el DataFrame a la vez
+    mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
+    cols_con_bloqueados = mask_bloqueados.any()
+    
+    if cols_con_bloqueados.any():
+        col_avisos = cols_con_bloqueados.idxmax() # Toma la primera columna donde aparezca
+        col_data = df_config[col_avisos].fillna("").astype(str).str.strip()
+        # Filtramos valores válidos directamente
+        filtro_validos = (col_data != "") & (~col_data.str.upper().str.contains("ESPACIOS BLOQUEADOS")) & (col_data.str.upper() != "NAN")
+        avisos_col_d = col_data[filtro_validos].unique().tolist()
     else:
-        for col in range(len(df_config.columns)):
-            for val in df_config.iloc[:, col].fillna("").astype(str):
-                val_str = str(val).strip()
-                if "⚠️" in val_str and val_str not in avisos_col_d:
-                    avisos_col_d.append(val_str)
+        # Si no lo encuentra, buscamos "⚠️" aplastando el DataFrame en una sola lista (muy rápido)
+        valores_planos = df_config.fillna("").astype(str).values.flatten()
+        celdas_alerta = pd.Series(valores_planos)[pd.Series(valores_planos).str.contains("⚠️")]
+        avisos_col_d = celdas_alerta.str.strip().unique().tolist()
 
-    def limpiar_bloque(val):
-        val_str = str(val).strip().upper()
-        if val_str.endswith('.0'):
-            return val_str[:-2]
-        return val_str
-
+    # -- OPTIMIZACIÓN 2: Limpieza de Columnas Vectorizada --
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
-        # Crear orden lógico para los días
         orden_dias = {"LUNES": 1, "MARTES": 2, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
         df_o['ORDEN_DIA'] = df_o['DIA'].map(orden_dias)
 
     if 'BLOQUE' in df_o.columns:
-        df_o['BLOQUE'] = df_o['BLOQUE'].apply(limpiar_bloque)
+        # Limpia el '.0' final usando regex, sin usar la función lenta .apply()
+        df_o['BLOQUE'] = df_o['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
+        
     if 'ESPACIOS' in df_o.columns:
         df_o['ESPACIOS'] = df_o['ESPACIOS'].astype(str).str.strip().str.upper()
         
     if 'SUBBLOQUE' in df_o.columns:
         df_o['SUBBLOQUE'] = df_o['SUBBLOQUE'].astype(str).str.strip().str.upper().replace('NAN', '')
 
-    espacios = sorted([e for e in df_o['ESPACIOS'].dropna().unique().tolist() if e != "NAN" and e != ""])
+    # Extraer espacios únicos
+    if 'ESPACIOS' in df_o.columns:
+        espacios_sucios = df_o['ESPACIOS'].dropna().unique()
+        espacios = sorted([e for e in espacios_sucios if e not in ["NAN", ""]])
+    else:
+        espacios = []
     
     return df_o, avisos_col_d, espacios
 
@@ -100,7 +100,6 @@ try:
     # --- PESTAÑA 1: HORARIO ---
     with tab1:
         col_dia, col_bloque = st.columns(2)
-        # Ordenamos los días seleccionables según el ORDEN_DIA que creamos
         dias_disponibles = df_ocupados.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
         dia_elegido = col_dia.selectbox("📅 Día:", dias_disponibles)
         
@@ -150,3 +149,24 @@ try:
 
 except Exception as e:
     st.error(f"Error técnico: {e}")
+
+# --- PIE DE PÁGINA PERSONALIZADO ("by Richard") ---
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 12px;
+        color: grey;
+        padding: 10px;
+        background-color: transparent;
+        z-index: 100;
+    }
+    </style>
+    <div class="footer">
+        by Richard
+    </div>
+""", unsafe_allow_html=True)
