@@ -48,7 +48,7 @@ def cargar_datos():
     # 4. Ahora sí, convertimos a texto limpio y ordenamos
     if 'DIA' in df.columns:
         df['DIA'] = df['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
-        orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "JUEVES": 4, "VIERNES": 5}
+       orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
         df['ORDEN_DIA'] = df['DIA'].map(orden_dias)
 
     if 'BLOQUE' in df.columns:
