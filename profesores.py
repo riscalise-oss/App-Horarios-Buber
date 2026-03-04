@@ -63,4 +63,67 @@ def cargar_datos():
         df['ESPACIOS'] = df['ESPACIOS'].astype(str).str.strip().str.upper()
 
     # Filtro final de seguridad por si quedó algún texto sucio
-    df = df[~df['DIA
+    df = df[~df['DIA'].isin(["NAN", "", "NAT", "NONE"])]
+    df = df[~df['DOCENTES'].isin(["NAN", "", "NAT", "NONE"])]
+        
+    return df
+
+try:
+    # Cargamos los datos limpios
+    df = cargar_datos()
+    
+    # --- MENÚ LATERAL ---
+    st.sidebar.header("⚙️ Opciones")
+    if st.sidebar.button("🔄 Actualizar Datos Ahora"):
+        st.cache_data.clear()
+        st.rerun()
+
+    # --- LÓGICA DE INTERFAZ ---
+    st.subheader("🔍 Buscador de Clases Asignadas")
+    
+    # 1. Agregamos la opción neutra al principio de la lista
+    lista_docentes = ["--- Seleccionar Docente ---"] + sorted(df['DOCENTES'].unique().tolist())
+    
+    # Usamos 2 columnas
+    col1, col2 = st.columns(2)
+    
+    docente_elegido = col1.selectbox("👤 Docente:", lista_docentes)
+    
+    # Días disponibles ordenados correctamente
+    dias_disponibles = df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
+    dia_elegido = col2.selectbox("📅 Día:", dias_disponibles)
+
+    st.divider()
+
+    # 2. Lógica para mostrar mensajes según lo que elijan
+    if docente_elegido == "--- Seleccionar Docente ---":
+        # Mensaje de bienvenida que se muestra al principio o al actualizar
+        st.info("👆 Por favor, selecciona un docente en el menú de arriba para ver su cronograma.")
+    else:
+        # --- FILTRADO DE DATOS ---
+        filtro = (df['DOCENTES'] == docente_elegido) & (df['DIA'] == dia_elegido)
+        # Ordenamos el resultado por el número de bloque
+        resultado = df[filtro].sort_values('ORDEN_BLOQUE')
+
+        # --- MOSTRAR RESULTADOS ---
+        if not resultado.empty:
+            st.success(f"✅ Cronograma de **{docente_elegido}** para el **{dia_elegido}**:")
+            cols_mostrar = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS'] if c in resultado.columns]
+            st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
+        else:
+            st.info(f"☕ **{docente_elegido}** no tiene clases registradas el **{dia_elegido}**.")
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
+
+# --- PIE DE PÁGINA "BY RICHARD" ---
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed; left: 0; bottom: 0; width: 100%;
+        text-align: center; font-size: 12px; color: grey;
+        padding: 10px; background-color: transparent; z-index: 100;
+    }
+    </style>
+    <div class="footer">by Richard</div>
+""", unsafe_allow_html=True)
