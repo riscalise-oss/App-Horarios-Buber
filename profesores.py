@@ -77,11 +77,11 @@ try:
         st.cache_data.clear()
         st.rerun()
 
-    # --- LÓGICA DE INTERFAZ ---
+# --- LÓGICA DE INTERFAZ ---
     st.subheader("🔍 Buscador de Clases Asignadas")
     
-    # Listas limpias para los selectores
-    lista_docentes = sorted(df['DOCENTES'].unique().tolist())
+    # 1. Agregamos la opción neutra al principio de la lista
+    lista_docentes = ["--- Seleccionar Docente ---"] + sorted(df['DOCENTES'].unique().tolist())
     
     # Usamos 2 columnas
     col1, col2 = st.columns(2)
@@ -94,19 +94,22 @@ try:
 
     st.divider()
 
-    # --- FILTRADO DE DATOS ---
-    filtro = (df['DOCENTES'] == docente_elegido) & (df['DIA'] == dia_elegido)
-    # Ordenamos el resultado por el número de bloque para que aparezca cronológicamente
-    resultado = df[filtro].sort_values('ORDEN_BLOQUE')
-
-    # --- MOSTRAR RESULTADOS ---
-    if not resultado.empty:
-        st.success(f"✅ Cronograma de **{docente_elegido}** para el **{dia_elegido}**:")
-        # Agregamos 'BLOQUE' al inicio de las columnas que se muestran
-        cols_mostrar = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS'] if c in resultado.columns]
-        st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
+    # 2. Lógica para mostrar mensajes según lo que elijan
+    if docente_elegido == "--- Seleccionar Docente ---":
+        # Mensaje de bienvenida que se muestra al principio o al actualizar
+        st.info("👆 Por favor, selecciona un docente en el menú de arriba para ver su cronograma.")
     else:
-        st.info(f"☕ **{docente_elegido}** no tiene clases registradas el **{dia_elegido}**.")
+        # --- FILTRADO DE DATOS ---
+        filtro = (df['DOCENTES'] == docente_elegido) & (df['DIA'] == dia_elegido)
+        resultado = df[filtro].sort_values('ORDEN_BLOQUE')
+
+        # --- MOSTRAR RESULTADOS ---
+        if not resultado.empty:
+            st.success(f"✅ Cronograma de **{docente_elegido}** para el **{dia_elegido}**:")
+            cols_mostrar = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS'] if c in resultado.columns]
+            st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
+        else:
+            st.info(f"☕ **{docente_elegido}** no tiene clases registradas el **{dia_elegido}**.")
 
 except Exception as e:
     st.error(f"Error técnico: {e}")
