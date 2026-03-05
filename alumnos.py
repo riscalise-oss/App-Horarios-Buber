@@ -70,4 +70,79 @@ def cargar_datos():
     # 6. Limpieza BLOQUE
     if 'BLOQUE' in df.columns:
         df['BLOQUE'] = df['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
-      
+        df['ORDEN_BLOQUE'] = pd.to_numeric(df['BLOQUE'], errors='coerce').fillna(99)
+        
+    # 7. Filtro final de seguridad (CORREGIDO)
+    if 'CURSOS_AGRUPADOS' in df.columns:
+        df = df.dropna(subset=['CURSOS_AGRUPADOS'])
+    if 'DIA' in df.columns:
+        df = df[~df['DIA'].isin(["NAN", "", "NAT", "NONE"])]
+        
+    return df
+
+try:
+    # Cargamos los datos
+    df = cargar_datos()
+    
+    # --- MENÚ LATERAL ---
+    st.sidebar.header("⚙️ Opciones")
+    if st.sidebar.button("🔄 Actualizar Datos Ahora"):
+        st.cache_data.clear()
+        st.rerun()
+
+    # --- LÓGICA DE INTERFAZ ---
+    st.subheader("🔍 Buscador de Clases")
+    
+    # Escudo extra: verificamos que exista la columna antes de armar los menús
+    if 'CURSOS_AGRUPADOS' not in df.columns:
+        st.error("⚠️ No se encontró la columna de CURSOS en el Excel. Verifica que el archivo original tenga esa columna.")
+    else:
+        # Usamos 3 columnas para los 3 desplegables
+        col1, col2, col3 = st.columns(3)
+        
+        # 1. Desplegable CURSO
+        lista_cursos = ["--- Seleccionar Año ---"] + sorted(df['CURSOS_AGRUPADOS'].unique().tolist())
+        curso_elegido = col1.selectbox("🎓 Año:", lista_cursos)
+        
+        # 2. Desplegable DÍA
+        dias_disponibles = df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist() if 'ORDEN_DIA' in df.columns else []
+        dia_elegido = col2.selectbox("📅 Día:", dias_disponibles)
+        
+        # 3. Desplegable BLOQUE
+        bloques_disponibles = df.sort_values('ORDEN_BLOQUE')['BLOQUE'].dropna().unique().tolist() if 'ORDEN_BLOQUE' in df.columns else []
+        bloque_elegido = col3.selectbox("⏰ Bloque:", bloques_disponibles)
+
+        st.divider()
+
+        # --- LÓGICA DE MOSTRADO ---
+        if curso_elegido == "--- Seleccionar Año ---":
+            st.info("👆 Por favor, selecciona un Año en el menú para ver qué clases tocan.")
+        else:
+            # Filtramos por los 3 campos a la vez
+            filtro = (df['CURSOS_AGRUPADOS'] == curso_elegido) & (df['DIA'] == dia_elegido) & (df['BLOQUE'] == bloque_elegido)
+            resultado = df[filtro]
+
+            if not resultado.empty:
+                st.success(f"✅ Clases de **{curso_elegido}** el **{dia_elegido}** (Bloque **{bloque_elegido}**):")
+                
+                # Solo traemos las 3 columnas pedidas y mostramos TODOS los renglones
+                cols_mostrar = [c for c in ['MATERIA', 'DOCENTES', 'ESPACIOS'] if c in resultado.columns]
+                
+                st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
+            else:
+                st.info(f"☕ No hay clases registradas para **{curso_elegido}** el **{dia_elegido}** en el bloque **{bloque_elegido}**.")
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
+
+# --- PIE DE PÁGINA "BY RICHARD" ---
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed; left: 0; bottom: 0; width: 100%;
+        text-align: center; font-size: 12px; color: grey;
+        padding: 10px; background-color: transparent; z-index: 100;
+    }
+    </style>
+    <div class="footer">by Richard</div>
+""", unsafe_allow_html=True)
