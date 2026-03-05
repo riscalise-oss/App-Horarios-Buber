@@ -70,4 +70,4 @@ def cargar_datos():
     # 6. Limpieza BLOQUE
     if 'BLOQUE' in df.columns:
         df['BLOQUE'] = df['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
-        df['
+      
