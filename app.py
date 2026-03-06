@@ -6,14 +6,9 @@ import base64
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
 # --- CSS LIMPIO Y SEGURO ---
-# Solo ocultamos el pie de página nativo. 
-# No tocamos el encabezado (header) para proteger tu botón de refrescar.
 ocultar_menu = """
     <style>
-    /* Oculta solo el "Made with Streamlit" */
     footer {visibility: hidden !important;}
-    
-    /* Oculta el icono de menú de la izquierda, si no lo necesitas */
     #MainMenu {visibility: hidden !important;}
     </style>
 """
@@ -50,7 +45,6 @@ LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzj
 
 @st.cache_data(ttl=60)
 def cargar_datos():
-    # Carga de datos
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
@@ -58,19 +52,15 @@ def cargar_datos():
     
     # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos --
     avisos_col_d = []
-    
-    # Buscar "Espacios Bloqueados" en todo el DataFrame a la vez
     mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
     cols_con_bloqueados = mask_bloqueados.any()
     
     if cols_con_bloqueados.any():
-        col_avisos = cols_con_bloqueados.idxmax() # Toma la primera columna donde aparezca
+        col_avisos = cols_con_bloqueados.idxmax()
         col_data = df_config[col_avisos].fillna("").astype(str).str.strip()
-        # Filtramos valores válidos directamente
         filtro_validos = (col_data != "") & (~col_data.str.upper().str.contains("ESPACIOS BLOQUEADOS")) & (col_data.str.upper() != "NAN")
         avisos_col_d = col_data[filtro_validos].unique().tolist()
     else:
-        # Si no lo encuentra, buscamos "⚠️" aplastando el DataFrame en una sola lista (muy rápido)
         valores_planos = df_config.fillna("").astype(str).values.flatten()
         celdas_alerta = pd.Series(valores_planos)[pd.Series(valores_planos).str.contains("⚠️")]
         avisos_col_d = celdas_alerta.str.strip().unique().tolist()
@@ -82,9 +72,7 @@ def cargar_datos():
         df_o['ORDEN_DIA'] = df_o['DIA'].map(orden_dias)
 
     if 'BLOQUE' in df_o.columns:
-        # Limpia el '.0' final usando regex, sin usar la función lenta .apply()
         df_o['BLOQUE'] = df_o['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
-        # Añadimos un orden numérico seguro para las tablas
         df_o['ORDEN_BLOQUE'] = pd.to_numeric(df_o['BLOQUE'], errors='coerce').fillna(99)
         
     if 'ESPACIOS' in df_o.columns:
@@ -93,7 +81,6 @@ def cargar_datos():
     if 'SUBBLOQUE' in df_o.columns:
         df_o['SUBBLOQUE'] = df_o['SUBBLOQUE'].astype(str).str.strip().str.upper().replace('NAN', '')
 
-    # Extraer espacios únicos
     if 'ESPACIOS' in df_o.columns:
         espacios_sucios = df_o['ESPACIOS'].dropna().unique()
         espacios = sorted([e for e in espacios_sucios if e not in ["NAN", ""]])
@@ -121,7 +108,6 @@ try:
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
         
-        # Desplegable traducido
         bloque_elegido = col_bloque.selectbox(
             "⏰ Bloque:", 
             bloques_ordenados,
@@ -130,18 +116,44 @@ try:
 
         st.divider()
         
-        # Título con el bloque traducido
         bloque_texto = traductor_bloques.get(str(bloque_elegido), f"Bloque {bloque_elegido}")
         st.header(f"{dia_elegido} - {bloque_texto}")
 
-        # Usamos .copy() para poder modificar la columna BLOQUE sin alertas
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))].copy()
         
-        lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
-        espacios_libres = [e for e in todos_los_espacios if e not in lista_ocupados]
+        # --- NUEVA LÓGICA DE ESPACIOS LIBRES (REPLICA SHEETS) ---
+        espacios_libres = []
+        
+        for e in todos_los_espacios:
+            df_esp = ocu[ocu['ESPACIOS'] == e]
+            
+            if df_esp.empty:
+                # El aula está 100% vacía
+                espacios_libres.append(e)
+            else:
+                # Buscar "ALMUERZO" en toda la fila para ser a prueba de balas
+                mask_almuerzo = df_esp.astype(str).apply(lambda row: row.str.contains('ALMUERZO', case=False)).any(axis=1)
+                almuerzos = mask_almuerzo.sum()
+                totales = len(df_esp)
+                normales = totales - almuerzos
+                
+                if normales == 0:
+                    # Si solo hay almuerzos, mostramos el aula limpia
+                    espacios_libres.append(e)
+                elif normales > 0 and almuerzos > 0:
+                    # Hay clase + almuerzo. Extraemos el subbloque
+                    fila_almuerzo = df_esp[mask_almuerzo].iloc[0]
+                    sub_alm = str(fila_almuerzo.get('SUBBLOQUE', '')).strip()
+                    
+                    if sub_alm and sub_alm.upper() != "NAN":
+                        espacios_libres.append(f"{e} ({sub_alm})")
+                    else:
+                        espacios_libres.append(f"{e} (Almuerzo)")
+
+        espacios_libres = sorted(espacios_libres)
 
         st.subheader("🟢 Ámbitos Libres")
-        st.success(" ✅ " + " | ✅ ".join(sorted(espacios_libres)) if espacios_libres else "No hay espacios libres.")
+        st.success(" ✅ " + " | ✅ ".join(espacios_libres) if espacios_libres else "No hay espacios libres.")
 
         st.subheader("📌 Reservas Especiales")
         if avisos_col_d: st.warning("\n".join([f"- {a}" for a in avisos_col_d]))
@@ -149,7 +161,6 @@ try:
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
-                # Traducimos la columna BLOQUE de la tabla
                 if 'BLOQUE' in ocu.columns:
                     ocu['BLOQUE'] = ocu['BLOQUE'].astype(str).replace(traductor_bloques)
                     
@@ -165,10 +176,8 @@ try:
         st.divider()
         st.header(f"Agenda de: {sel}")
         
-        # Filtramos, ordenamos por día y bloque, y hacemos copia
         res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
         
-        # Traducimos la columna BLOQUE de la tabla
         if 'BLOQUE' in res.columns:
             res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
             
@@ -181,10 +190,8 @@ try:
         st.divider()
         st.header(f"Agenda de: {espacio_sel}")
         
-        # Filtramos, ordenamos por día y bloque, y hacemos copia
         res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
         
-        # Traducimos la columna BLOQUE de la tabla
         if 'BLOQUE' in res_e.columns:
             res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
             
@@ -194,7 +201,7 @@ try:
 except Exception as e:
     st.error(f"Error técnico: {e}")
 
-# --- PIE DE PÁGINA PERSONALIZADO ("by Richard") ---
+# --- PIE DE PÁGINA PERSONALIZADO ---
 st.markdown("""
     <style>
     .footer {
