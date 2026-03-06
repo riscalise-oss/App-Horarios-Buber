@@ -108,9 +108,25 @@ try:
         dias_disponibles = df.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist() if 'ORDEN_DIA' in df.columns else []
         dia_elegido = col2.selectbox("📅 Día:", dias_disponibles)
         
-        # 3. Desplegable BLOQUE
+        # 3. Desplegable BLOQUE CON DICCIONARIO
         bloques_disponibles = df.sort_values('ORDEN_BLOQUE')['BLOQUE'].dropna().unique().tolist() if 'ORDEN_BLOQUE' in df.columns else []
-        bloque_elegido = col3.selectbox("⏰ Bloque:", bloques_disponibles)
+        
+        # --- EL DICCIONARIO TRADUCTOR ---
+        traductor_bloques = {
+            "1": "1. 7:40 a 9:00",
+            "2": "2. 9:10 a 10:30",
+            "3": "3. 10:45 a 12:05",
+            "4": "4. 12:15 a 12:55 ; 12:55 a 13:35",
+            "5": "5. 13:45 a 15:00",
+            "6": "6. 15:10 a 16:30"
+        }
+
+        # Usamos format_func para disfrazar el número en la pantalla
+        bloque_elegido = col3.selectbox(
+            "⏰ Bloque:", 
+            bloques_disponibles,
+            format_func=lambda x: traductor_bloques.get(str(x), f"Bloque {x}")
+        )
 
         st.divider()
 
@@ -122,27 +138,15 @@ try:
             filtro = (df['CURSOS_AGRUPADOS'] == curso_elegido) & (df['DIA'] == dia_elegido) & (df['BLOQUE'] == bloque_elegido)
             resultado = df[filtro]
 
+            # Traducimos el bloque elegido para los mensajes en pantalla
+            bloque_texto = traductor_bloques.get(str(bloque_elegido), f"Bloque {bloque_elegido}")
+
             if not resultado.empty:
-                st.success(f"✅ Clases de **{curso_elegido}** el **{dia_elegido}** (Bloque **{bloque_elegido}**):")
+                st.success(f"✅ Clases de **{curso_elegido}** el **{dia_elegido}** ({bloque_texto}):")
                 
                 # Solo traemos las 3 columnas pedidas y mostramos TODOS los renglones
                 cols_mostrar = [c for c in ['MATERIA', 'DOCENTES', 'ESPACIOS'] if c in resultado.columns]
                 
                 st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
             else:
-                st.info(f"☕ No hay clases registradas para **{curso_elegido}** el **{dia_elegido}** en el bloque **{bloque_elegido}**.")
-
-except Exception as e:
-    st.error(f"Error técnico: {e}")
-
-# --- PIE DE PÁGINA "BY RICHARD" ---
-st.markdown("""
-    <style>
-    .footer {
-        position: fixed; left: 0; bottom: 0; width: 100%;
-        text-align: center; font-size: 12px; color: grey;
-        padding: 10px; background-color: transparent; z-index: 100;
-    }
-    </style>
-    <div class="footer">by Richard</div>
-""", unsafe_allow_html=True)
+                st.info(f"☕ No hay clases registr
