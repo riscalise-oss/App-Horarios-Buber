@@ -10,6 +10,7 @@ ocultar_menu = """
     <style>
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden !important;}
+    header {visibility: hidden !important;}
     </style>
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
@@ -102,12 +103,27 @@ try:
     else:
         # --- FILTRADO DE DATOS ---
         filtro = (df['DOCENTES'] == docente_elegido) & (df['DIA'] == dia_elegido)
-        # Ordenamos el resultado por el número de bloque
-        resultado = df[filtro].sort_values('ORDEN_BLOQUE')
+        # Ordenamos el resultado por el número de bloque y usamos .copy() para evitar advertencias de Pandas
+        resultado = df[filtro].sort_values('ORDEN_BLOQUE').copy()
 
         # --- MOSTRAR RESULTADOS ---
         if not resultado.empty:
             st.success(f"✅ Cronograma de **{docente_elegido}** para el **{dia_elegido}**:")
+            
+            # --- EL DICCIONARIO TRADUCTOR PARA LA TABLA ---
+            traductor_bloques = {
+                "1": "1. 7:40 a 9:00",
+                "2": "2. 9:10 a 10:30",
+                "3": "3. 10:45 a 12:05",
+                "4": "4. 12:15 a 12:55 ; 12:55 a 13:35",
+                "5": "5. 13:45 a 15:00",
+                "6": "6. 15:10 a 16:30"
+            }
+            
+            # Reemplazamos los números por el texto en la columna BLOQUE
+            if 'BLOQUE' in resultado.columns:
+                resultado['BLOQUE'] = resultado['BLOQUE'].astype(str).replace(traductor_bloques)
+            
             cols_mostrar = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS'] if c in resultado.columns]
             st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
         else:
