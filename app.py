@@ -19,6 +19,16 @@ ocultar_menu = """
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
 
+# --- DICCIONARIO TRADUCTOR DE BLOQUES ---
+traductor_bloques = {
+    "1": "1. 7:40 a 9:00",
+    "2": "2. 9:10 a 10:30",
+    "3": "3. 10:45 a 12:05",
+    "4": "4. 12:15 a 12:55 ; 12:55 a 13:35",
+    "5": "5. 13:45 a 15:00",
+    "6": "6. 15:10 a 16:30"
+}
+
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
@@ -68,12 +78,14 @@ def cargar_datos():
     # -- OPTIMIZACIÓN 2: Limpieza de Columnas Vectorizada --
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
-        orden_dias = {"LUNES": 1, "MARTES": 2, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
+        orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
         df_o['ORDEN_DIA'] = df_o['DIA'].map(orden_dias)
 
     if 'BLOQUE' in df_o.columns:
         # Limpia el '.0' final usando regex, sin usar la función lenta .apply()
         df_o['BLOQUE'] = df_o['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
+        # Añadimos un orden numérico seguro para las tablas
+        df_o['ORDEN_BLOQUE'] = pd.to_numeric(df_o['BLOQUE'], errors='coerce').fillna(99)
         
     if 'ESPACIOS' in df_o.columns:
         df_o['ESPACIOS'] = df_o['ESPACIOS'].astype(str).str.strip().str.upper()
@@ -108,12 +120,23 @@ try:
         
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
-        bloque_elegido = col_bloque.selectbox("⏰ Bloque:", bloques_ordenados)
+        
+        # Desplegable traducido
+        bloque_elegido = col_bloque.selectbox(
+            "⏰ Bloque:", 
+            bloques_ordenados,
+            format_func=lambda x: traductor_bloques.get(str(x), f"Bloque {x}")
+        )
 
         st.divider()
-        st.header(f"{dia_elegido} - Bloque {bloque_elegido}")
+        
+        # Título con el bloque traducido
+        bloque_texto = traductor_bloques.get(str(bloque_elegido), f"Bloque {bloque_elegido}")
+        st.header(f"{dia_elegido} - {bloque_texto}")
 
-        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))]
+        # Usamos .copy() para poder modificar la columna BLOQUE sin alertas
+        ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))].copy()
+        
         lista_ocupados = ocu['ESPACIOS'].dropna().tolist() if 'ESPACIOS' in ocu.columns else []
         espacios_libres = [e for e in todos_los_espacios if e not in lista_ocupados]
 
@@ -126,6 +149,10 @@ try:
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
+                # Traducimos la columna BLOQUE de la tabla
+                if 'BLOQUE' in ocu.columns:
+                    ocu['BLOQUE'] = ocu['BLOQUE'].astype(str).replace(traductor_bloques)
+                    
                 cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
@@ -137,7 +164,14 @@ try:
         sel = st.selectbox(f"Selecciona {tipo}:", lista)
         st.divider()
         st.header(f"Agenda de: {sel}")
-        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'BLOQUE'])
+        
+        # Filtramos, ordenamos por día y bloque, y hacemos copia
+        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+        
+        # Traducimos la columna BLOQUE de la tabla
+        if 'BLOQUE' in res.columns:
+            res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
+            
         cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
         st.dataframe(res[cols], hide_index=True, use_container_width=True)
 
@@ -146,7 +180,14 @@ try:
         espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
         st.divider()
         st.header(f"Agenda de: {espacio_sel}")
-        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'BLOQUE'])
+        
+        # Filtramos, ordenamos por día y bloque, y hacemos copia
+        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+        
+        # Traducimos la columna BLOQUE de la tabla
+        if 'BLOQUE' in res_e.columns:
+            res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
+            
         cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
         st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
 
