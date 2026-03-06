@@ -149,4 +149,19 @@ try:
                 
                 st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
             else:
-                st.info(f"☕ No hay clases registr
+                st.info(f"☕ No hay clases registradas para **{curso_elegido}** el **{dia_elegido}** ({bloque_texto}).")
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
+
+# --- PIE DE PÁGINA "BY RICHARD" ---
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed; left: 0; bottom: 0; width: 100%;
+        text-align: center; font-size: 12px; color: grey;
+        padding: 10px; background-color: transparent; z-index: 100;
+    }
+    </style>
+    <div class="footer">by Richard</div>
+""", unsafe_allow_html=True)
