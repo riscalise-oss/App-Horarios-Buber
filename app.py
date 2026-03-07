@@ -123,7 +123,9 @@ try:
         
         # --- NUEVA LÓGICA DE ESPACIOS LIBRES (REPLICA SHEETS) ---
         libres_completos = []
-        libres_parciales = []
+        libres_medio_1 = []
+        libres_medio_2 = []
+        libres_otros = []
         
         for e in todos_los_espacios:
             df_esp = ocu[ocu['ESPACIOS'] == e]
@@ -147,32 +149,43 @@ try:
                     sub_alm = str(fila_almuerzo.get('SUBBLOQUE', '')).strip()
                     
                     if sub_alm and sub_alm.upper() != "NAN":
-                        libres_parciales.append(f"{e} ({sub_alm})")
+                        if sub_alm.endswith("1"):  # Ej: 4-1 o 5-1
+                            libres_medio_1.append(e)
+                        elif sub_alm.endswith("2"): # Ej: 4-2 o 5-2
+                            libres_medio_2.append(e)
+                        else:
+                            libres_otros.append(f"{e} ({sub_alm})")
                     else:
-                        libres_parciales.append(f"{e} (Almuerzo)")
+                        libres_otros.append(f"{e} (Almuerzo)")
 
-        # Ordenamos ambas listas alfabéticamente por separado
+        # Ordenamos las listas alfabéticamente
         libres_completos = sorted(libres_completos)
-        libres_parciales = sorted(libres_parciales)
-
-        # Construimos el texto final a mostrar
-        texto_mostrar = ""
-        
-        if libres_completos:
-            texto_mostrar += " ✅ " + " | ✅ ".join(libres_completos)
-            
-        if libres_parciales:
-            if texto_mostrar:
-                # Si ya hay espacios completos, agregamos un separador antes de los parciales
-                texto_mostrar += "   |   " 
-            # Usamos un check más oscuro para los parciales
-            texto_mostrar += " ✔️ " + " | ✔️ ".join(libres_parciales)
+        libres_medio_1 = sorted(libres_medio_1)
+        libres_medio_2 = sorted(libres_medio_2)
+        libres_otros = sorted(libres_otros)
 
         st.subheader("🟢 Ámbitos Libres")
-        if texto_mostrar:
-            st.success(texto_mostrar)
-        else:
-            st.success("No hay espacios libres.")
+        
+        hay_libres = False
+        
+        if libres_completos:
+            st.success("**Bloque Completo:**\n\n ✅ " + " | ✅ ".join(libres_completos))
+            hay_libres = True
+            
+        if libres_medio_1:
+            st.info("⏳ **1er Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_1))
+            hay_libres = True
+            
+        if libres_medio_2:
+            st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_2))
+            hay_libres = True
+            
+        if libres_otros:
+            st.info("⏳ **Otros libres parciales:**\n\n ✔️ " + " | ✔️ ".join(libres_otros))
+            hay_libres = True
+
+        if not hay_libres:
+            st.error("No hay espacios libres en este bloque.")
 
         st.subheader("📌 Reservas Especiales")
         if avisos_col_d: st.warning("\n".join([f"- {a}" for a in avisos_col_d]))
