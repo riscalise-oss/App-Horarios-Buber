@@ -84,12 +84,6 @@ try:
     # Cargamos los datos
     df = cargar_datos()
     
-    # --- MENÚ LATERAL ---
-    st.sidebar.header("⚙️ Opciones")
-    if st.sidebar.button("🔄 Actualizar Datos Ahora"):
-        st.cache_data.clear()
-        st.rerun()
-
     # --- LÓGICA DE INTERFAZ ---
     st.subheader("🔍 Buscador de Clases")
     
