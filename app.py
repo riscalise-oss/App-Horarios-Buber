@@ -92,11 +92,6 @@ def cargar_datos():
 try:
     df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
 
-    st.sidebar.header("⚙️ Opciones")
-    if st.sidebar.button("🔄 Actualizar Datos Ahora"):
-        st.cache_data.clear()
-        st.rerun()
-
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
     # --- PESTAÑA 1: HORARIO ---
