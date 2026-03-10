@@ -50,6 +50,9 @@ def cargar_datos():
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
+    # VACUNA 1: Eliminar columnas duplicadas para evitar errores
+    df_o = df_o.loc[:, ~df_o.columns.duplicated()].copy()
+    
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
         orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
@@ -67,7 +70,7 @@ def cargar_datos():
 
     espacios = sorted([e for e in df_o['ESPACIOS'].dropna().unique() if e not in ["NAN", ""]]) if 'ESPACIOS' in df_o.columns else []
     
-    # --- 2. CARGAR RESERVAS ESPECIALES (LECTURA INTELIGENTE) ---
+    # --- 2. CARGAR RESERVAS ESPECIALES ---
     df_raw = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     header_idx = 0
     # Buscar dinámicamente dónde empiezan los encabezados
@@ -78,6 +81,9 @@ def cargar_datos():
             
     df_res = pd.read_csv(LINK_RESERVAS, header=header_idx, on_bad_lines='skip', engine='python')
     df_res.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_res.columns]
+    
+    # VACUNA 2: Eliminar columnas duplicadas para evitar errores 'str'
+    df_res = df_res.loc[:, ~df_res.columns.duplicated()].copy()
     
     if 'DÍA' in df_res.columns: df_res.rename(columns={'DÍA': 'DIA'}, inplace=True)
     if 'ESPACIOS' in df_res.columns: df_res.rename(columns={'ESPACIOS': 'ESPACIO'}, inplace=True)
