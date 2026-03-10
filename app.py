@@ -42,15 +42,14 @@ except Exception:
 
 # --- ENLACES ---
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
-LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=447717872&single=true&output=csv"
 
 @st.cache_data(ttl=60)
 def cargar_datos():
-    # --- 1. CARGAR OCUPADOS ---
+    # --- CARGAR OCUPADOS ---
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
-    # VACUNA 1: Eliminar columnas duplicadas para evitar errores
+    # Eliminar columnas duplicadas por seguridad
     df_o = df_o.loc[:, ~df_o.columns.duplicated()].copy()
     
     if 'DIA' in df_o.columns:
@@ -70,60 +69,10 @@ def cargar_datos():
 
     espacios = sorted([e for e in df_o['ESPACIOS'].dropna().unique() if e not in ["NAN", ""]]) if 'ESPACIOS' in df_o.columns else []
     
-    # --- 2. CARGAR RESERVAS ESPECIALES ---
-    df_raw = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
-    header_idx = 0
-    # Buscar dinámicamente dónde empiezan los encabezados
-    for i, row in df_raw.iterrows():
-        if any(isinstance(val, str) and 'FECHA' in val.upper() for val in row.values):
-            header_idx = i
-            break
-            
-    df_res = pd.read_csv(LINK_RESERVAS, header=header_idx, on_bad_lines='skip', engine='python')
-    df_res.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_res.columns]
-    
-    # VACUNA 2: Eliminar columnas duplicadas para evitar errores 'str'
-    df_res = df_res.loc[:, ~df_res.columns.duplicated()].copy()
-    
-    if 'DÍA' in df_res.columns: df_res.rename(columns={'DÍA': 'DIA'}, inplace=True)
-    if 'ESPACIOS' in df_res.columns: df_res.rename(columns={'ESPACIOS': 'ESPACIO'}, inplace=True)
-    
-    if 'FECHA' in df_res.columns and 'ESPACIO' in df_res.columns:
-        # Limpiar filas vacías
-        df_res = df_res.dropna(subset=['FECHA', 'ESPACIO'])
-        df_res = df_res[df_res['FECHA'].astype(str).str.strip() != 'NAN']
-        df_res = df_res[df_res['FECHA'].astype(str).str.strip() != '']
-        
-        # MAGIA: Calcular "A quién desplaza" para TODAS las filas de la tabla
-        desplazados = []
-        for idx, row in df_res.iterrows():
-            dia = str(row.get('DIA', '')).strip().upper().replace('Í', 'I')
-            bloque = str(row.get('BLOQUE', '')).replace('.0', '').strip()
-            espacio = str(row.get('ESPACIO', '')).strip().upper()
-            
-            df_esp = df_o[(df_o['DIA'] == dia) & (df_o['BLOQUE'] == bloque) & (df_o['ESPACIOS'] == espacio)]
-            
-            if df_esp.empty:
-                desplazados.append("✅ Libre en horario fijo")
-            else:
-                df_clases = df_esp[~df_esp.astype(str).apply(lambda r: r.str.contains('ALMUERZO', case=False)).any(axis=1)]
-                if df_clases.empty:
-                    desplazados.append("✅ Libre en horario fijo")
-                else:
-                    profs = [p for p in df_clases['DOCENTES'].unique() if str(p).upper() not in ["NAN", ""]]
-                    mats = [m for m in df_clases['MATERIA'].unique() if str(m).upper() not in ["NAN", ""]]
-                    str_profs = " y ".join(profs) if profs else "Docente no asignado"
-                    str_mats = " - ".join(mats) if mats else "Materia no asignada"
-                    desplazados.append(f"⚠️ {str_profs} ({str_mats})")
-        
-        df_res['DESPLAZA A'] = desplazados
-    else:
-        df_res = pd.DataFrame() 
-
-    return df_o, df_res, espacios
+    return df_o, espacios
 
 try:
-    df_ocupados, df_config, todos_los_espacios = cargar_datos()
+    df_ocupados, todos_los_espacios = cargar_datos()
 
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
@@ -155,38 +104,10 @@ try:
 
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))].copy()
         
-        # Generar todas las combinaciones posibles de fecha para evitar errores
-        posibles_fechas = [
-            fecha_elegida.strftime("%d/%m/%Y"), 
-            f"{fecha_elegida.day}/{fecha_elegida.month}/{fecha_elegida.year}", 
-            fecha_elegida.strftime("%Y-%m-%d"), 
-            f"{fecha_elegida.day}/{fecha_elegida.strftime('%m')}/{fecha_elegida.year}", 
-            f"{fecha_elegida.strftime('%d')}/{fecha_elegida.month}/{fecha_elegida.year}",
-            fecha_elegida.strftime("%d/%m/%y"), 
-            f"{fecha_elegida.day}/{fecha_elegida.month}/{fecha_elegida.strftime('%y')}",
-            f"{fecha_elegida.day}/{fecha_elegida.strftime('%m')}/{fecha_elegida.strftime('%y')}"
-        ]
-        
-        # Averiguar qué espacios están reservados HOY y EN ESTE BLOQUE
-        espacios_reservados_hoy = []
-        if not df_config.empty and 'FECHA' in df_config.columns:
-            for idx, row in df_config.iterrows():
-                fecha_res = str(row.get('FECHA', '')).strip()
-                bloque_res = str(row.get('BLOQUE', '')).replace('.0', '').strip()
-                esp_res = str(row.get('ESPACIO', '')).strip().upper()
-                
-                if fecha_res in posibles_fechas and bloque_res == str(bloque_elegido):
-                    espacios_reservados_hoy.append(esp_res)
-        
-        espacios_reservados_hoy = list(set(espacios_reservados_hoy))
-
         # --- CÁLCULO DE ESPACIOS LIBRES ---
-        libres_completos, libres_medio_1, libres_medio_2, libres_otros = [], [], [], []
+        libres_completos, libres_medio_1, libres_medio_2 = [], [], []
         
         for e in todos_los_espacios:
-            if e in espacios_reservados_hoy:
-                continue # Lo saltamos si tiene reserva especial
-                
             df_esp = ocu[ocu['ESPACIOS'] == e]
             
             if df_esp.empty:
@@ -225,34 +146,7 @@ try:
             st.error("No hay espacios libres en este bloque.")
 
         st.divider()
-
-        # --- ALERTA VISUAL DEL BLOQUE SELECCIONADO ---
-        st.subheader("📌 Alertas de este Horario")
-        alertas_actuales = df_config[
-            (df_config['FECHA'].astype(str).str.strip().isin(posibles_fechas)) & 
-            (df_config['BLOQUE'].astype(str).str.replace('.0', '').str.strip() == str(bloque_elegido))
-        ] if not df_config.empty and 'FECHA' in df_config.columns else pd.DataFrame()
         
-        if not alertas_actuales.empty:
-            for idx, row in alertas_actuales.iterrows():
-                esp = str(row.get('ESPACIO', ''))
-                desp = str(row.get('DESPLAZA A', ''))
-                motivo = str(row.get('MOTIVO', ''))
-                st.warning(f"**{esp}** reservado ({motivo}). Desplaza a: **{desp}**")
-        else:
-            st.info("No hay reservas especiales para este horario específico.")
-
-        st.divider()
-
-        # --- LA TABLA GLOBAL (DASHBOARD ADMINISTRADOR) ---
-        st.subheader("📋 Todas las Reservas Especiales")
-        if not df_config.empty:
-            mostrar_cols = ['FECHA', 'DIA', 'BLOQUE', 'ESPACIO', 'MOTIVO', 'DESPLAZA A']
-            mostrar_cols = [c for c in mostrar_cols if c in df_config.columns]
-            st.dataframe(df_config[mostrar_cols], hide_index=True, use_container_width=True)
-        else:
-            st.info("No hay reservas especiales registradas en la base de datos.")
-
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
                 if 'BLOQUE' in ocu.columns:
@@ -264,28 +158,31 @@ try:
     with tab2:
         tipo = st.radio("Buscar por:", ["Docente", "Curso"], horizontal=True)
         col_filtro = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
-        lista = sorted([x for x in df_ocupados[col_filtro].dropna().unique() if str(x).upper() != "NAN"])
-        sel = st.selectbox(f"Selecciona {tipo}:", lista)
-        st.divider()
-        st.header(f"Agenda de: {sel}")
         
-        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
-        if 'BLOQUE' in res.columns: res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
+        if col_filtro in df_ocupados.columns:
+            lista = sorted([x for x in df_ocupados[col_filtro].dropna().unique() if str(x).upper() != "NAN"])
+            sel = st.selectbox(f"Selecciona {tipo}:", lista)
+            st.divider()
+            st.header(f"Agenda de: {sel}")
             
-        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
-        st.dataframe(res[cols], hide_index=True, use_container_width=True)
+            res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+            if 'BLOQUE' in res.columns: res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
+                
+            cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
+            st.dataframe(res[cols], hide_index=True, use_container_width=True)
 
     # --- PESTAÑA 3: BUSCAR POR ÁMBITO ---
     with tab3:
-        espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
-        st.divider()
-        st.header(f"Agenda de: {espacio_sel}")
-        
-        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
-        if 'BLOQUE' in res_e.columns: res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
+        if 'ESPACIOS' in df_ocupados.columns:
+            espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
+            st.divider()
+            st.header(f"Agenda de: {espacio_sel}")
             
-        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
-        st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
+            res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+            if 'BLOQUE' in res_e.columns: res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
+                
+            cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
+            st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error técnico: {e}")
@@ -309,4 +206,3 @@ st.markdown("""
     <div class="footer">
         by Richard
     </div>
-""", unsafe_allow_html=True)
