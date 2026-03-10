@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import base64
+import datetime
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
@@ -50,7 +51,7 @@ def cargar_datos():
     
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     
-    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos --
+    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos Globales --
     avisos_col_d = []
     mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
     cols_con_bloqueados = mask_bloqueados.any()
@@ -87,19 +88,30 @@ def cargar_datos():
     else:
         espacios = []
     
-    return df_o, avisos_col_d, espacios
+    return df_o, df_config, avisos_col_d, espacios
 
 try:
-    df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
+    df_ocupados, df_config, avisos_col_d, todos_los_espacios = cargar_datos()
 
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
     # --- PESTAÑA 1: HORARIO ---
     with tab1:
-        col_dia, col_bloque = st.columns(2)
-        dias_disponibles = df_ocupados.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
-        dia_elegido = col_dia.selectbox("📅 Día:", dias_disponibles)
+        col_fecha, col_dia, col_bloque = st.columns([1.5, 1.5, 1])
         
+        # 1. Selector de Fecha (Máquina del tiempo)
+        fecha_elegida = col_fecha.date_input("📅 Fecha de reserva:", datetime.date.today())
+        
+        # 2. Determinación automática del Día
+        dias_semana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+        dia_auto = dias_semana[fecha_elegida.weekday()]
+        
+        dias_disponibles = df_ocupados.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
+        index_dia = dias_disponibles.index(dia_auto) if dia_auto in dias_disponibles else 0
+        
+        dia_elegido = col_dia.selectbox("📅 Día (Automático):", dias_disponibles, index=index_dia)
+        
+        # 3. Selector de Bloque
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
         
@@ -112,32 +124,74 @@ try:
         st.divider()
         
         bloque_texto = traductor_bloques.get(str(bloque_elegido), f"Bloque {bloque_elegido}")
-        st.header(f"{dia_elegido} - {bloque_texto}")
+        st.header(f"{fecha_elegida.strftime('%d/%m/%Y')} | {dia_elegido} - {bloque_texto}")
 
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))].copy()
         
-        # --- NUEVA LÓGICA DE ESPACIOS LIBRES (ESTRICTA Y SEGURA) ---
+        # --- LÓGICA DE INTERCEPCIÓN DE RESERVAS ESPECIALES ---
+        espacios_reservados_hoy = []
+        alertas_desplazamiento = []
+        
+        # Preparamos la fecha en los formatos probables que Google Sheets puede exportar
+        f1 = fecha_elegida.strftime("%d/%m/%Y") # Ej: 09/03/2026
+        f2 = f"{fecha_elegida.day}/{fecha_elegida.month}/{fecha_elegida.year}" # Ej: 9/3/2026
+        f3 = fecha_elegida.strftime("%Y-%m-%d") # Ej: 2026-03-09
+        
+        # Buscamos en el CSV de Reservas
+        for idx, row in df_config.astype(str).iterrows():
+            fila_lista = [str(x).strip().upper() for x in row.values]
+            
+            # Chequeamos si la fecha y el bloque están en esta fila
+            match_fecha = any(f1 in c or f2 in c or f3 in c for c in fila_lista)
+            match_bloque = any(str(bloque_elegido) == c or f"{bloque_elegido}.0" == c for c in fila_lista)
+            
+            if match_fecha and match_bloque:
+                # Si coinciden fecha y bloque, detectamos qué aula es
+                for e in todos_los_espacios:
+                    if e.upper() in fila_lista:
+                        espacios_reservados_hoy.append(e)
+        
+        espacios_reservados_hoy = list(set(espacios_reservados_hoy)) # Eliminar duplicados
+        
+        # Calculamos a quién desplazan
+        for e in espacios_reservados_hoy:
+            df_esp_fijo = ocu[ocu['ESPACIOS'] == e]
+            if not df_esp_fijo.empty:
+                # Filtramos para no contar a los que solo tienen almuerzo
+                df_clases = df_esp_fijo[~df_esp_fijo.astype(str).apply(lambda r: r.str.contains('ALMUERZO', case=False)).any(axis=1)]
+                if not df_clases.empty:
+                    profs = [p for p in df_clases['DOCENTES'].unique() if str(p).upper() not in ["NAN", ""]]
+                    mats = [m for m in df_clases['MATERIA'].unique() if str(m).upper() not in ["NAN", ""]]
+                    str_profs = " y ".join(profs) if profs else "Docente no asignado"
+                    str_mats = " - ".join(mats) if mats else "Materia no asignada"
+                    alertas_desplazamiento.append(f"⚠️ **{e}** reservado. Desplaza a: **{str_profs}** ({str_mats})")
+                else:
+                    alertas_desplazamiento.append(f"✅ **{e}** reservado. (Estaba libre en horario fijo)")
+            else:
+                alertas_desplazamiento.append(f"✅ **{e}** reservado. (Estaba libre en horario fijo)")
+
+        # --- LÓGICA DE ESPACIOS LIBRES ---
         libres_completos = []
         libres_medio_1 = []
         libres_medio_2 = []
         libres_otros = []
         
         for e in todos_los_espacios:
+            # MAGIA: Si el espacio está en la lista de reservas especiales de hoy, lo saltamos por completo
+            if e in espacios_reservados_hoy:
+                continue 
+                
             df_esp = ocu[ocu['ESPACIOS'] == e]
             
             if df_esp.empty:
-                # El aula no aparece en todo el bloque, está 100% vacía
                 libres_completos.append(e)
             else:
-                # Descartamos las filas que dicen "ALMUERZO" porque los alumnos no ocupan aula física
                 mask_almuerzo = df_esp.astype(str).apply(lambda row: row.str.contains('ALMUERZO', case=False)).any(axis=1)
                 df_clases = df_esp[~mask_almuerzo]
                 
                 if df_clases.empty:
-                    # Si al aula solo se le asignó almuerzo, está libre completa
                     libres_completos.append(e)
                 else:
-                    # Banderas para saber qué se está ocupando realmente
                     ocupa_1 = False
                     ocupa_2 = False
                     ocupa_todo = False
@@ -152,39 +206,30 @@ try:
                         else:
                             ocupa_todo = True
                             
-                    # APLICAMOS LA LÓGICA ESTRICTA (Invertimos para saber qué está libre)
                     if ocupa_todo or (ocupa_1 and ocupa_2):
-                        # Está ocupada todo el bloque (ya sea por un curso o por dos distintos)
                         pass 
                     elif ocupa_2 and not ocupa_1:
-                        # Si verificamos que la mitad 2 está ocupada, la libre es la mitad 1
                         libres_medio_1.append(e)
                     elif ocupa_1 and not ocupa_2:
-                        # Si verificamos que la mitad 1 está ocupada, la libre es la mitad 2
                         libres_medio_2.append(e)
 
-        # Ordenamos las listas alfabéticamente
         libres_completos = sorted(libres_completos)
         libres_medio_1 = sorted(libres_medio_1)
         libres_medio_2 = sorted(libres_medio_2)
         libres_otros = sorted(libres_otros)
 
         st.subheader("🟢 Ámbitos Libres")
-        
         hay_libres = False
         
         if libres_completos:
             st.success("**Bloque Completo:**\n\n ✅ " + " | ✅ ".join(libres_completos))
             hay_libres = True
-            
         if libres_medio_1:
             st.info("⏳ **1er Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_1))
             hay_libres = True
-            
         if libres_medio_2:
             st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_2))
             hay_libres = True
-            
         if libres_otros:
             st.info("⏳ **Otros libres parciales:**\n\n ✔️ " + " | ✔️ ".join(libres_otros))
             hay_libres = True
@@ -192,9 +237,19 @@ try:
         if not hay_libres:
             st.error("No hay espacios libres en este bloque.")
 
-        st.subheader("📌 Reservas Especiales")
-        if avisos_col_d: st.warning("\n".join([f"- {a}" for a in avisos_col_d]))
-        else: st.info("No hay reservas.")
+        # --- SECCIÓN DE RESERVAS ESPECIALES ACTUALIZADA ---
+        st.subheader("📌 Reservas Especiales del Día")
+        if alertas_desplazamiento:
+            for alerta in alertas_desplazamiento:
+                if "⚠️" in alerta:
+                    st.warning(alerta)
+                else:
+                    st.success(alerta)
+        elif avisos_col_d: 
+            # Si no hay reservas cruzadas en la tabla, muestra los avisos generales que encuentre
+            st.info("\n".join([f"- {a}" for a in avisos_col_d]))
+        else: 
+            st.info("No hay reservas programadas para este horario.")
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
