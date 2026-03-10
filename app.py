@@ -48,48 +48,47 @@ def cargar_datos():
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
-    # --- VACUNA: Eliminar columnas duplicadas para evitar errores ---
+    # --- VACUNA: Eliminar columnas duplicadas ---
     df_o = df_o.loc[:, ~df_o.columns.duplicated()].copy()
     
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
-    
-    # --- VACUNA: Eliminar columnas duplicadas también aquí ---
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
-    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos (AHORA UNIFICANDO AL PROFESOR) --
+    # -- OPTIMIZACIÓN 1: Búsqueda Segura de Avisos (CORREGIDA) --
     avisos_col_d = []
+    col_avisos = None
+    col_desplaza = None
     
-    # Buscamos dinámicamente en qué columna está el aviso y en cuál el profesor
-    mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
-    mask_desplaza = df_config.apply(lambda col: col.astype(str).str.contains("Avisar al Profesor", case=False, na=False) | col.astype(str).str.contains("Desplaza a:", case=False, na=False))
-    
-    col_avisos = mask_bloqueados.idxmax() if mask_bloqueados.any() else None
-    col_desplaza = mask_desplaza.idxmax() if mask_desplaza.any() else None
-    
+    # Buscamos las columnas de forma segura 1x1 para evitar el error de "Series is ambiguous"
+    for col in df_config.columns:
+        col_str = df_config[col].astype(str)
+        if col_str.str.contains("Espacios Bloqueados", case=False, na=False).any():
+            col_avisos = col
+        if col_str.str.contains("Avisar al Profesor", case=False, na=False).any() or \
+           col_str.str.contains("Desplaza a:", case=False, na=False).any():
+            col_desplaza = col
+            
     if col_avisos is not None:
         for idx, row in df_config.iterrows():
             aviso_ppal = str(row[col_avisos]).strip()
             
             # Filtramos celdas vacías o los títulos
-            if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "ESPACIOS BLOQUEADOS"]:
+            if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
                 texto_final = aviso_ppal
                 
-                # Si encontramos la columna del profe y tiene datos, la pegamos al lado
+                # Si encontramos la columna del profe, la pegamos
                 if col_desplaza is not None:
                     aviso_profe = str(row[col_desplaza]).strip()
-                    # Ignoramos celdas con errores típicos de Sheets o vacías
                     if aviso_profe and aviso_profe.upper() not in ["", "NAN", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
                         texto_final = f"{aviso_ppal}   {aviso_profe}"
                         
                 if texto_final not in avisos_col_d:
                     avisos_col_d.append(texto_final)
     else:
-        # Plan de respaldo (idéntico a tu lógica original pero agrupando fila por fila)
+        # Plan de respaldo (Busca iconos de alerta directamente en toda la fila)
         for idx, row in df_config.iterrows():
-            # Extraemos cualquier celda de la fila que tenga el ícono ⚠️
-            celdas_con_alerta = [str(x).strip() for x in row.values if pd.notna(x) and "⚠️" in str(x)]
+            celdas_con_alerta = [str(x).strip() for x in row.values if pd.notna(x) and ("⚠️" in str(x) or "🔴" in str(x) or "🟡" in str(x))]
             if celdas_con_alerta:
-                # Si en una misma fila encuentra la reserva y al profe desplazado, los une
                 texto_unido = "   ".join(celdas_con_alerta)
                 if texto_unido not in avisos_col_d:
                     avisos_col_d.append(texto_unido)
@@ -145,7 +144,7 @@ try:
 
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))].copy()
         
-        # --- NUEVA LÓGICA DE ESPACIOS LIBRES (ESTRICTA Y SEGURA) ---
+        # --- LÓGICA DE ESPACIOS LIBRES ---
         libres_completos = []
         libres_medio_1 = []
         libres_medio_2 = []
@@ -205,9 +204,9 @@ try:
         if not hay_libres:
             st.error("No hay espacios libres en este bloque.")
 
-        st.subheader("📌 Reservas Especiales")
-        if avisos_col_d: st.warning("\n".join([f"- {a}" for a in avisos_col_d]))
-        else: st.info("No hay reservas.")
+        st.subheader("📌 Reservas Especiales del Día")
+        if avisos_col_d: st.warning("\n\n".join([f"**•** {a}" for a in avisos_col_d]))
+        else: st.info("No hay reservas especiales hoy.")
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
