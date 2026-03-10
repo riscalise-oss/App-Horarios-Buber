@@ -203,3 +203,64 @@ try:
         else: st.info("No hay reservas.")
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
+            if not ocu.empty:
+                if 'BLOQUE' in ocu.columns:
+                    ocu['BLOQUE'] = ocu['BLOQUE'].astype(str).replace(traductor_bloques)
+                    
+                cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
+                st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
+
+    # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
+    with tab2:
+        tipo = st.radio("Buscar por:", ["Docente", "Curso"], horizontal=True)
+        col_filtro = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
+        lista = sorted([x for x in df_ocupados[col_filtro].dropna().unique() if str(x).upper() != "NAN"])
+        sel = st.selectbox(f"Selecciona {tipo}:", lista)
+        st.divider()
+        st.header(f"Agenda de: {sel}")
+        
+        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+        
+        if 'BLOQUE' in res.columns:
+            res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
+            
+        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
+        st.dataframe(res[cols], hide_index=True, use_container_width=True)
+
+    # --- PESTAÑA 3: BUSCAR POR ÁMBITO ---
+    with tab3:
+        espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
+        st.divider()
+        st.header(f"Agenda de: {espacio_sel}")
+        
+        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+        
+        if 'BLOQUE' in res_e.columns:
+            res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
+            
+        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
+        st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
+
+# --- PIE DE PÁGINA PERSONALIZADO ---
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 12px;
+        color: grey;
+        padding: 10px;
+        background-color: transparent;
+        z-index: 100;
+    }
+    </style>
+    <div class="footer">
+        by Richard
+    </div>
+""", unsafe_allow_html=True)
