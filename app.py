@@ -56,20 +56,43 @@ def cargar_datos():
     # --- VACUNA: Eliminar columnas duplicadas también aquí ---
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
-    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos --
+    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos (AHORA UNIFICANDO AL PROFESOR) --
     avisos_col_d = []
-    mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
-    cols_con_bloqueados = mask_bloqueados.any()
     
-    if cols_con_bloqueados.any():
-        col_avisos = cols_con_bloqueados.idxmax()
-        col_data = df_config[col_avisos].fillna("").astype(str).str.strip()
-        filtro_validos = (col_data != "") & (~col_data.str.upper().str.contains("ESPACIOS BLOQUEADOS")) & (col_data.str.upper() != "NAN")
-        avisos_col_d = col_data[filtro_validos].unique().tolist()
+    # Buscamos dinámicamente en qué columna está el aviso y en cuál el profesor
+    mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
+    mask_desplaza = df_config.apply(lambda col: col.astype(str).str.contains("Avisar al Profesor", case=False, na=False) | col.astype(str).str.contains("Desplaza a:", case=False, na=False))
+    
+    col_avisos = mask_bloqueados.idxmax() if mask_bloqueados.any() else None
+    col_desplaza = mask_desplaza.idxmax() if mask_desplaza.any() else None
+    
+    if col_avisos is not None:
+        for idx, row in df_config.iterrows():
+            aviso_ppal = str(row[col_avisos]).strip()
+            
+            # Filtramos celdas vacías o los títulos
+            if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "ESPACIOS BLOQUEADOS"]:
+                texto_final = aviso_ppal
+                
+                # Si encontramos la columna del profe y tiene datos, la pegamos al lado
+                if col_desplaza is not None:
+                    aviso_profe = str(row[col_desplaza]).strip()
+                    # Ignoramos celdas con errores típicos de Sheets o vacías
+                    if aviso_profe and aviso_profe.upper() not in ["", "NAN", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
+                        texto_final = f"{aviso_ppal}   {aviso_profe}"
+                        
+                if texto_final not in avisos_col_d:
+                    avisos_col_d.append(texto_final)
     else:
-        valores_planos = df_config.fillna("").astype(str).values.flatten()
-        celdas_alerta = pd.Series(valores_planos)[pd.Series(valores_planos).str.contains("⚠️")]
-        avisos_col_d = celdas_alerta.str.strip().unique().tolist()
+        # Plan de respaldo (idéntico a tu lógica original pero agrupando fila por fila)
+        for idx, row in df_config.iterrows():
+            # Extraemos cualquier celda de la fila que tenga el ícono ⚠️
+            celdas_con_alerta = [str(x).strip() for x in row.values if pd.notna(x) and "⚠️" in str(x)]
+            if celdas_con_alerta:
+                # Si en una misma fila encuentra la reserva y al profe desplazado, los une
+                texto_unido = "   ".join(celdas_con_alerta)
+                if texto_unido not in avisos_col_d:
+                    avisos_col_d.append(texto_unido)
 
     # -- OPTIMIZACIÓN 2: Limpieza de Columnas Vectorizada --
     if 'DIA' in df_o.columns:
@@ -132,44 +155,28 @@ try:
             df_esp = ocu[ocu['ESPACIOS'] == e]
             
             if df_esp.empty:
-                # El aula no aparece en todo el bloque, está 100% vacía
                 libres_completos.append(e)
             else:
-                # Descartamos las filas que dicen "ALMUERZO" porque los alumnos no ocupan aula física
                 mask_almuerzo = df_esp.astype(str).apply(lambda row: row.str.contains('ALMUERZO', case=False)).any(axis=1)
                 df_clases = df_esp[~mask_almuerzo]
                 
                 if df_clases.empty:
-                    # Si al aula solo se le asignó almuerzo, está libre completa
                     libres_completos.append(e)
                 else:
-                    # Banderas para saber qué se está ocupando realmente
                     ocupa_1 = False
                     ocupa_2 = False
                     ocupa_todo = False
                     
                     for sub in df_clases['SUBBLOQUE'].astype(str).str.strip().str.upper():
-                        if sub == "NAN" or sub == "":
-                            ocupa_todo = True
-                        elif sub.endswith("1"):
-                            ocupa_1 = True
-                        elif sub.endswith("2"):
-                            ocupa_2 = True
-                        else:
-                            ocupa_todo = True
+                        if sub == "NAN" or sub == "": ocupa_todo = True
+                        elif sub.endswith("1"): ocupa_1 = True
+                        elif sub.endswith("2"): ocupa_2 = True
+                        else: ocupa_todo = True
                             
-                    # APLICAMOS LA LÓGICA ESTRICTA (Invertimos para saber qué está libre)
-                    if ocupa_todo or (ocupa_1 and ocupa_2):
-                        # Está ocupada todo el bloque (ya sea por un curso o por dos distintos)
-                        pass 
-                    elif ocupa_2 and not ocupa_1:
-                        # Si verificamos que la mitad 2 está ocupada, la libre es la mitad 1
-                        libres_medio_1.append(e)
-                    elif ocupa_1 and not ocupa_2:
-                        # Si verificamos que la mitad 1 está ocupada, la libre es la mitad 2
-                        libres_medio_2.append(e)
+                    if ocupa_todo or (ocupa_1 and ocupa_2): pass 
+                    elif ocupa_2 and not ocupa_1: libres_medio_1.append(e)
+                    elif ocupa_1 and not ocupa_2: libres_medio_2.append(e)
 
-        # Ordenamos las listas alfabéticamente
         libres_completos = sorted(libres_completos)
         libres_medio_1 = sorted(libres_medio_1)
         libres_medio_2 = sorted(libres_medio_2)
@@ -188,79 +195,4 @@ try:
             hay_libres = True
             
         if libres_medio_2:
-            st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_2))
-            hay_libres = True
-            
-        if libres_otros:
-            st.info("⏳ **Otros libres parciales:**\n\n ✔️ " + " | ✔️ ".join(libres_otros))
-            hay_libres = True
-
-        if not hay_libres:
-            st.error("No hay espacios libres en este bloque.")
-
-        st.subheader("📌 Reservas Especiales")
-        if avisos_col_d: st.warning("\n".join([f"- {a}" for a in avisos_col_d]))
-        else: st.info("No hay reservas.")
-
-        with st.expander("🔴 Ver Clases Regulares", expanded=False):
-            if not ocu.empty:
-                if 'BLOQUE' in ocu.columns:
-                    ocu['BLOQUE'] = ocu['BLOQUE'].astype(str).replace(traductor_bloques)
-                    
-                cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
-                st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
-
-    # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
-    with tab2:
-        tipo = st.radio("Buscar por:", ["Docente", "Curso"], horizontal=True)
-        col_filtro = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
-        lista = sorted([x for x in df_ocupados[col_filtro].dropna().unique() if str(x).upper() != "NAN"])
-        sel = st.selectbox(f"Selecciona {tipo}:", lista)
-        st.divider()
-        st.header(f"Agenda de: {sel}")
-        
-        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
-        
-        if 'BLOQUE' in res.columns:
-            res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
-            
-        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
-        st.dataframe(res[cols], hide_index=True, use_container_width=True)
-
-    # --- PESTAÑA 3: BUSCAR POR ÁMBITO ---
-    with tab3:
-        espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
-        st.divider()
-        st.header(f"Agenda de: {espacio_sel}")
-        
-        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
-        
-        if 'BLOQUE' in res_e.columns:
-            res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
-            
-        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
-        st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
-
-except Exception as e:
-    st.error(f"Error técnico: {e}")
-
-# --- PIE DE PÁGINA PERSONALIZADO ---
-st.markdown("""
-    <style>
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        text-align: center;
-        font-size: 12px;
-        color: grey;
-        padding: 10px;
-        background-color: transparent;
-        z-index: 100;
-    }
-    </style>
-    <div class="footer">
-        by Richard
-    </div>
-""", unsafe_allow_html=True)
+            st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_
