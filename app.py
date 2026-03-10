@@ -40,7 +40,7 @@ try:
 except Exception:
     st.title("🛡️ Buscador de Ámbitos")
 
-# --- 1. TUS ENLACES ---
+# --- ENLACES ---
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=447717872&single=true&output=csv"
 
@@ -50,23 +50,8 @@ def cargar_datos():
     df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
     
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
-    
-    # -- OPTIMIZACIÓN 1: Búsqueda Vectorizada de Avisos Globales --
-    avisos_col_d = []
-    mask_bloqueados = df_config.apply(lambda col: col.astype(str).str.contains("Espacios Bloqueados", case=False, na=False))
-    cols_con_bloqueados = mask_bloqueados.any()
-    
-    if cols_con_bloqueados.any():
-        col_avisos = cols_con_bloqueados.idxmax()
-        col_data = df_config[col_avisos].fillna("").astype(str).str.strip()
-        filtro_validos = (col_data != "") & (~col_data.str.upper().str.contains("ESPACIOS BLOQUEADOS")) & (col_data.str.upper() != "NAN")
-        avisos_col_d = col_data[filtro_validos].unique().tolist()
-    else:
-        valores_planos = df_config.fillna("").astype(str).values.flatten()
-        celdas_alerta = pd.Series(valores_planos)[pd.Series(valores_planos).str.contains("⚠️")]
-        avisos_col_d = celdas_alerta.str.strip().unique().tolist()
 
-    # -- OPTIMIZACIÓN 2: Limpieza de Columnas Vectorizada --
+    # -- Limpieza de Columnas Vectorizada --
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
         orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
@@ -88,10 +73,10 @@ def cargar_datos():
     else:
         espacios = []
     
-    return df_o, df_config, avisos_col_d, espacios
+    return df_o, df_config, espacios
 
 try:
-    df_ocupados, df_config, avisos_col_d, todos_los_espacios = cargar_datos()
+    df_ocupados, df_config, todos_los_espacios = cargar_datos()
 
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
@@ -99,10 +84,8 @@ try:
     with tab1:
         col_fecha, col_dia, col_bloque = st.columns([1.5, 1.5, 1])
         
-        # 1. Selector de Fecha (Máquina del tiempo)
         fecha_elegida = col_fecha.date_input("📅 Fecha de reserva:", datetime.date.today())
         
-        # 2. Determinación automática del Día
         dias_semana = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
         dia_auto = dias_semana[fecha_elegida.weekday()]
         
@@ -111,7 +94,6 @@ try:
         
         dia_elegido = col_dia.selectbox("📅 Día (Automático):", dias_disponibles, index=index_dia)
         
-        # 3. Selector de Bloque
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
         
@@ -128,36 +110,38 @@ try:
 
         ocu = df_ocupados[(df_ocupados['DIA'] == dia_elegido) & (df_ocupados['BLOQUE'] == str(bloque_elegido))].copy()
         
-        # --- LÓGICA DE INTERCEPCIÓN DE RESERVAS ESPECIALES ---
+        # --- LÓGICA DE INTERCEPCIÓN DE RESERVAS ESPECIALES (MEJORADA) ---
         espacios_reservados_hoy = []
         alertas_desplazamiento = []
         
-        # Preparamos la fecha en los formatos probables que Google Sheets puede exportar
-        f1 = fecha_elegida.strftime("%d/%m/%Y") # Ej: 09/03/2026
-        f2 = f"{fecha_elegida.day}/{fecha_elegida.month}/{fecha_elegida.year}" # Ej: 9/3/2026
-        f3 = fecha_elegida.strftime("%Y-%m-%d") # Ej: 2026-03-09
+        # Todas las formas posibles en las que Google Sheets o Pandas podrían exportar la fecha
+        f1 = fecha_elegida.strftime("%d/%m/%Y") # 09/03/2026
+        f2 = f"{fecha_elegida.day}/{fecha_elegida.month}/{fecha_elegida.year}" # 9/3/2026
+        f3 = fecha_elegida.strftime("%Y-%m-%d") # 2026-03-09
+        f4 = f"{fecha_elegida.day}/{fecha_elegida.strftime('%m')}/{fecha_elegida.year}" # 9/03/2026 (TU FORMATO EXACTO)
+        f5 = f"{fecha_elegida.strftime('%d')}/{fecha_elegida.month}/{fecha_elegida.year}" # 09/3/2026
         
-        # Buscamos en el CSV de Reservas
+        posibles_fechas = [f1, f2, f3, f4, f5]
+        
         for idx, row in df_config.astype(str).iterrows():
-            fila_lista = [str(x).strip().upper() for x in row.values]
+            fila_lista = [str(x).strip().upper() for x in row.values if str(x).upper() != "NAN"]
             
-            # Chequeamos si la fecha y el bloque están en esta fila
-            match_fecha = any(f1 in c or f2 in c or f3 in c for c in fila_lista)
+            # Chequeo flexible de fecha y bloque
+            match_fecha = any(f in c for c in fila_lista for f in posibles_fechas)
             match_bloque = any(str(bloque_elegido) == c or f"{bloque_elegido}.0" == c for c in fila_lista)
             
             if match_fecha and match_bloque:
-                # Si coinciden fecha y bloque, detectamos qué aula es
                 for e in todos_los_espacios:
-                    if e.upper() in fila_lista:
+                    # Buscamos si el nombre del aula está en alguna celda de esta fila
+                    if any(e in c for c in fila_lista):
                         espacios_reservados_hoy.append(e)
         
-        espacios_reservados_hoy = list(set(espacios_reservados_hoy)) # Eliminar duplicados
+        espacios_reservados_hoy = list(set(espacios_reservados_hoy))
         
-        # Calculamos a quién desplazan
+        # Identificar al profesor desplazado
         for e in espacios_reservados_hoy:
             df_esp_fijo = ocu[ocu['ESPACIOS'] == e]
             if not df_esp_fijo.empty:
-                # Filtramos para no contar a los que solo tienen almuerzo
                 df_clases = df_esp_fijo[~df_esp_fijo.astype(str).apply(lambda r: r.str.contains('ALMUERZO', case=False)).any(axis=1)]
                 if not df_clases.empty:
                     profs = [p for p in df_clases['DOCENTES'].unique() if str(p).upper() not in ["NAN", ""]]
@@ -177,7 +161,7 @@ try:
         libres_otros = []
         
         for e in todos_los_espacios:
-            # MAGIA: Si el espacio está en la lista de reservas especiales de hoy, lo saltamos por completo
+            # MAGIA: Excluir de los verdes si está reservado hoy
             if e in espacios_reservados_hoy:
                 continue 
                 
@@ -237,7 +221,7 @@ try:
         if not hay_libres:
             st.error("No hay espacios libres en este bloque.")
 
-        # --- SECCIÓN DE RESERVAS ESPECIALES ACTUALIZADA ---
+        # --- SECCIÓN DE RESERVAS ESPECIALES ACTUALIZADA (CERO SPAM) ---
         st.subheader("📌 Reservas Especiales del Día")
         if alertas_desplazamiento:
             for alerta in alertas_desplazamiento:
@@ -245,11 +229,8 @@ try:
                     st.warning(alerta)
                 else:
                     st.success(alerta)
-        elif avisos_col_d: 
-            # Si no hay reservas cruzadas en la tabla, muestra los avisos generales que encuentre
-            st.info("\n".join([f"- {a}" for a in avisos_col_d]))
         else: 
-            st.info("No hay reservas programadas para este horario.")
+            st.info("No hay reservas programadas para este horario específico.")
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
