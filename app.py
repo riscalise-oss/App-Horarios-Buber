@@ -303,4 +303,4 @@ st.markdown("""
     <div class="footer">
         by Richard
     </div>
-""", unsafe_allow_html=True
+""", unsafe_allow_html=True)
