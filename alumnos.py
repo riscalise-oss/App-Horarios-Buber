@@ -72,7 +72,7 @@ def cargar_datos():
         df['BLOQUE'] = df['BLOQUE'].astype(str).str.strip().str.upper().str.replace(r'\.0$', '', regex=True)
         df['ORDEN_BLOQUE'] = pd.to_numeric(df['BLOQUE'], errors='coerce').fillna(99)
         
-    # 7. Filtro final de seguridad (CORREGIDO)
+    # 7. Filtro final de seguridad
     if 'CURSOS_AGRUPADOS' in df.columns:
         df = df.dropna(subset=['CURSOS_AGRUPADOS'])
     if 'DIA' in df.columns:
@@ -128,9 +128,9 @@ try:
         if curso_elegido == "--- Seleccionar Año ---":
             st.info("👆 Por favor, selecciona un Año en el menú para ver qué clases tocan.")
         else:
-            # Filtramos por los 3 campos a la vez
+            # Filtramos por los 3 campos a la vez y creamos una copia segura (.copy())
             filtro = (df['CURSOS_AGRUPADOS'] == curso_elegido) & (df['DIA'] == dia_elegido) & (df['BLOQUE'] == bloque_elegido)
-            resultado = df[filtro]
+            resultado = df[filtro].copy()
 
             # Traducimos el bloque elegido para los mensajes en pantalla
             bloque_texto = traductor_bloques.get(str(bloque_elegido), f"Bloque {bloque_elegido}")
@@ -138,8 +138,14 @@ try:
             if not resultado.empty:
                 st.success(f"✅ Clases de **{curso_elegido}** el **{dia_elegido}** ({bloque_texto}):")
                 
-                # Solo traemos las 3 columnas pedidas y mostramos TODOS los renglones
-                cols_mostrar = [c for c in ['MATERIA', 'DOCENTES', 'ESPACIOS'] if c in resultado.columns]
+                # --- NUEVA LÓGICA: COLUMNA "MEDIO BLOQUE" ---
+                if 'MITAD' in resultado.columns:
+                    resultado = resultado.rename(columns={'MITAD': 'MEDIO BLOQUE'})
+                    # Limpiamos los '.0' y los vacíos (nan) para que se vea impecable
+                    resultado['MEDIO BLOQUE'] = resultado['MEDIO BLOQUE'].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'NAN'], '')
+                
+                # Elegimos las columnas a mostrar, poniendo 'MEDIO BLOQUE' primero si existe
+                cols_mostrar = [c for c in ['MEDIO BLOQUE', 'MATERIA', 'DOCENTES', 'ESPACIOS'] if c in resultado.columns]
                 
                 st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
             else:
