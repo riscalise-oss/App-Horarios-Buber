@@ -105,7 +105,7 @@ try:
         # 3. Desplegable BLOQUE CON DICCIONARIO
         bloques_disponibles = df.sort_values('ORDEN_BLOQUE')['BLOQUE'].dropna().unique().tolist() if 'ORDEN_BLOQUE' in df.columns else []
         
-        # --- EL DICCIONARIO TRADUCTOR ---
+        # --- EL DICCIONARIO TRADUCTOR DE BLOQUES GENERALES ---
         traductor_bloques = {
             "1": "1. 7:40 a 9:00",
             "2": "2. 9:10 a 10:30",
@@ -138,14 +138,31 @@ try:
             if not resultado.empty:
                 st.success(f"✅ Clases de **{curso_elegido}** el **{dia_elegido}** ({bloque_texto}):")
                 
-                # --- NUEVA LÓGICA: COLUMNA "MEDIO BLOQUE" ---
+                # --- NUEVA LÓGICA: COLUMNA "HORARIO INICIO" (REEMPLAZANDO "MITAD") ---
                 if 'MITAD' in resultado.columns:
-                    resultado = resultado.rename(columns={'MITAD': 'MEDIO BLOQUE'})
-                    # Limpiamos los '.0' y los vacíos (nan) para que se vea impecable
-                    resultado['MEDIO BLOQUE'] = resultado['MEDIO BLOQUE'].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'NAN'], '')
+                    resultado = resultado.rename(columns={'MITAD': 'HORARIO INICIO'})
+                    # Limpiamos los '.0' y los vacíos (nan) 
+                    resultado['HORARIO INICIO'] = resultado['HORARIO INICIO'].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'NAN'], '')
+                    
+                    # DICCIONARIO DE HORARIOS EXACTOS POR CADA MITAD DE BLOQUE
+                    horarios_medios_bloques = {
+                        "1": {"1": "1. 7:40", "2": "2. 8:20"},
+                        "2": {"1": "1. 9:10", "2": "2. 9:50"},
+                        "3": {"1": "1. 10:45", "2": "2. 11:35"},
+                        "4": {"1": "1. 12:15", "2": "2. 12:55"},
+                        "5": {"1": "1. 13:45", "2": "2. 14:35"},
+                        "6": {"1": "1. 15:10", "2": "2. 15:50"}
+                    }
+                    
+                    # Aplicamos la traducción visual dependiendo del bloque en el que estemos
+                    bloque_str = str(bloque_elegido)
+                    if bloque_str in horarios_medios_bloques:
+                        resultado['HORARIO INICIO'] = resultado['HORARIO INICIO'].apply(
+                            lambda x: horarios_medios_bloques[bloque_str].get(x, x)
+                        )
                 
-                # Elegimos las columnas a mostrar, poniendo 'MEDIO BLOQUE' primero si existe
-                cols_mostrar = [c for c in ['MEDIO BLOQUE', 'MATERIA', 'DOCENTES', 'ESPACIOS'] if c in resultado.columns]
+                # Elegimos las columnas a mostrar, poniendo 'HORARIO INICIO' primero si existe
+                cols_mostrar = [c for c in ['HORARIO INICIO', 'MATERIA', 'DOCENTES', 'ESPACIOS'] if c in resultado.columns]
                 
                 st.dataframe(resultado[cols_mostrar], hide_index=True, use_container_width=True)
             else:
