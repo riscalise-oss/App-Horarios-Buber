@@ -138,20 +138,20 @@ try:
             if not resultado.empty:
                 st.success(f"✅ Clases de **{curso_elegido}** el **{dia_elegido}** ({bloque_texto}):")
                 
-                # --- NUEVA LÓGICA: COLUMNA "HORARIO INICIO" (REEMPLAZANDO "MITAD") ---
+                # --- NUEVA LÓGICA: COLUMNA "HORARIO INICIO" COMPLETADA ---
                 if 'MITAD' in resultado.columns:
                     resultado = resultado.rename(columns={'MITAD': 'HORARIO INICIO'})
-                    # Limpiamos los '.0' y los vacíos (nan) 
+                    # Limpiamos los '.0' y los vacíos (nan) dejándolos como un texto en blanco ""
                     resultado['HORARIO INICIO'] = resultado['HORARIO INICIO'].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'NAN'], '')
                     
-                    # DICCIONARIO DE HORARIOS EXACTOS POR CADA MITAD DE BLOQUE
+                    # DICCIONARIO DE HORARIOS EXACTOS (AHORA INCLUYE LOS BLOQUES COMPLETOS "")
                     horarios_medios_bloques = {
-                        "1": {"1": "1. 7:40", "2": "2. 8:20"},
-                        "2": {"1": "1. 9:10", "2": "2. 9:50"},
-                        "3": {"1": "1. 10:45", "2": "2. 11:35"},
-                        "4": {"1": "1. 12:15", "2": "2. 12:55"},
-                        "5": {"1": "1. 13:45", "2": "2. 14:35"},
-                        "6": {"1": "1. 15:10", "2": "2. 15:50"}
+                        "1": {"1": "1. 7:40", "2": "2. 8:20", "": "1. 7:40"},
+                        "2": {"1": "1. 9:10", "2": "2. 9:50", "": "1. 9:10"},
+                        "3": {"1": "1. 10:45", "2": "2. 11:35", "": "1. 10:45"},
+                        "4": {"1": "1. 12:15", "2": "2. 12:55", "": "1. 12:15"},
+                        "5": {"1": "1. 13:45", "2": "2. 14:35", "": "1. 13:45"},
+                        "6": {"1": "1. 15:10", "2": "2. 15:50", "": "1. 15:10"}
                     }
                     
                     # Aplicamos la traducción visual dependiendo del bloque en el que estemos
