@@ -1,9 +1,44 @@
 import streamlit as st
 import pandas as pd
 import base64
+import os
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Ámbitos Alumnos", page_icon="logo.png", layout="wide")
+
+# ==============================================================================
+# --- FUNCIÓN PARA EL FONDO INSTITUCIONAL ---
+# ==============================================================================
+def aplicar_fondo_institucional(archivo_imagen):
+    """
+    Carga una imagen local, la convierte a base64 e inyecta el CSS 
+    necesario para usarla como fondo de la aplicación.
+    """
+    if os.path.exists(archivo_imagen):
+        try:
+            with open(archivo_imagen, "rb") as f:
+                data = f.read()
+            img_base64 = base64.b64encode(data).decode()
+            
+            # CSS para el fondo
+            page_bg_img = f'''
+            <style>
+            .stApp {{
+                background-image: url("data:image/png;base64,{img_base64}");
+                background-size: cover;
+                background-repeat: no-repeat;
+                background-position: center;
+                background-attachment: fixed; /* Mantiene el fondo quieto al hacer scroll */
+            }}
+            </style>
+            '''
+            st.markdown(page_bg_img, unsafe_allow_html=True)
+            
+        except Exception as e:
+            st.error(f"Error al cargar el fondo: {e}")
+    else:
+        st.warning(f"⚠️ No se encontró el archivo '{archivo_imagen}'. La app funcionará sin fondo personalizado.")
+# ==============================================================================
 
 # --- CSS LIMPIO Y SEGURO ---
 ocultar_menu = """
@@ -15,6 +50,9 @@ ocultar_menu = """
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
 
+# 🚀 APLICAR EL FONDO INSTITUCIONAL 🚀
+aplicar_fondo_institucional("fondo.png")
+
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
@@ -22,9 +60,9 @@ try:
     img_base64 = base64.b64encode(data).decode()
     
     st.markdown(f"""
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; margin-bottom: 20px; background-color: rgba(255, 255, 255, 0.7); padding: 10px; border-radius: 10px;">
             <img src="data:image/png;base64,{img_base64}" width="70" style="margin-right: 15px; border-radius: 8px;">
-            <h1 style="margin: 0; padding: 0;">Ámbitos Alumnos</h1>
+            <h1 style="margin: 0; padding: 0; color: #31333F;">Ámbitos Alumnos</h1>
         </div>
     """, unsafe_allow_html=True)
 except Exception:
@@ -55,7 +93,6 @@ def cargar_datos():
         if '3ERO' in c or '3ER' in c or '3º' in c: return '3er Año'
         if '4TO' in c or '4º' in c: return '4to Año'
         if '5TO' in c or '5º' in c: return '5to Año'
-        # Si no es de 7mo a 5to (ej. "Inicial", "Reunión", "6to"), devuelve None para borrarlo
         return None 
         
     if 'CURSOS' in df.columns:
@@ -144,7 +181,7 @@ try:
                     # Limpiamos los '.0' y los vacíos (nan) dejándolos como un texto en blanco ""
                     resultado['HORARIO INICIO'] = resultado['HORARIO INICIO'].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'NAN'], '')
                     
-                    # DICCIONARIO DE HORARIOS EXACTOS (AHORA INCLUYE LOS BLOQUES COMPLETOS "")
+                    # DICCIONARIO DE HORARIOS EXACTOS
                     horarios_medios_bloques = {
                         "1": {"1": "1. 7:40", "2": "2. 8:20", "": "1. 7:40"},
                         "2": {"1": "1. 9:10", "2": "2. 9:50", "": "1. 9:10"},
