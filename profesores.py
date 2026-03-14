@@ -1,11 +1,58 @@
 import streamlit as st
 import pandas as pd
 import base64
+import os
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Ámbitos Profesores", page_icon="logo.png", layout="wide")
 
-# --- CSS LIMPIO Y SEGURO ---
+# ==============================================================================
+# --- FUNCIÓN PARA EL FONDO INSTITUCIONAL ---
+# ==============================================================================
+def aplicar_fondo_institucional(archivo_imagen):
+    """
+    Carga una imagen local, la convierte a base64 e inyecta el CSS 
+    necesario para usarla como fondo de la aplicación.
+    """
+    if os.path.exists(archivo_imagen):
+        try:
+            with open(archivo_imagen, "rb") as f:
+                data = f.read()
+            img_base64 = base64.b64encode(data).decode()
+            
+            # CSS para el fondo
+            # .stApp aplica el fondo a toda la aplicación
+            page_bg_img = f'''
+            <style>
+            .stApp {{
+                background-image: url("data:image/png;base64,{img_base64}");
+                background-size: cover;
+                background-repeat: no-repeat;
+                background-position: center;
+                background-attachment: fixed; /* Mantiene el fondo quieto al hacer scroll */
+            }}
+            
+            # /* Asegurar que los elementos de UI sean legibles sobre el fondo */
+            # .stSelectbox, .stDataFrame {{
+            #     background-color: rgba(255, 255, 255, 0.8) !important; /* Fondo blanco semi-transparente para selectores y tablas */
+            #     border-radius: 8px;
+            #     padding: 5px;
+            # }}
+            
+            </style>
+            '''
+            st.markdown(page_bg_img, unsafe_allow_html=True)
+            
+        except Exception as e:
+            st.error(f"Error al cargar el fondo: {e}")
+    else:
+        st.warning(f"⚠️ No se encontró el archivo '{archivo_imagen}'. La app funcionará sin fondo personalizado.")
+
+# ==============================================================================
+# --- FIN DE FUNCIÓN PARA EL FONDO ---
+# ==============================================================================
+
+# --- CSS LIMPIO Y SEGURO (Ocultar elementos estándar) ---
 ocultar_menu = """
     <style>
     #MainMenu {visibility: hidden !important;}
@@ -15,16 +62,20 @@ ocultar_menu = """
 """
 st.markdown(ocultar_menu, unsafe_allow_html=True)
 
+# 🚀 APLICAR EL FONDO INSTITUCIONAL 🚀
+# Reemplaza "fondo.png" con el nombre exacto de tu archivo si es diferente
+aplicar_fondo_institucional("fondo.png")
+
 # --- TÍTULO CON LOGO ---
 try:
     with open("logo.png", "rb") as f:
         data = f.read()
-    img_base64 = base64.b64encode(data).decode()
+    img_base64_logo = base64.b64encode(data).decode()
     
     st.markdown(f"""
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
-            <img src="data:image/png;base64,{img_base64}" width="70" style="margin-right: 15px; border-radius: 8px;">
-            <h1 style="margin: 0; padding: 0;">Ámbitos Profesores</h1>
+        <div style="display: flex; align-items: center; margin-bottom: 20px; background-color: rgba(255, 255, 255, 0.7); padding: 10px; border-radius: 10px;">
+            <img src="data:image/png;base64,{img_base64_logo}" width="70" style="margin-right: 15px; border-radius: 8px;">
+            <h1 style="margin: 0; padding: 0; color: #31333F;">Ámbitos Profesores</h1>
         </div>
     """, unsafe_allow_html=True)
 except Exception:
