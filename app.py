@@ -92,12 +92,13 @@ def cargar_datos():
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
-    # -- OPTIMIZACIÓN 1: Búsqueda Segura de Avisos (CORREGIDA) --
+    # -- OPTIMIZACIÓN 1: Búsqueda Segura de Avisos (AHORA CON MOTIVO) --
     avisos_col_d = []
     col_avisos = None
     col_desplaza = None
+    col_motivo = None
     
-    # Buscamos las columnas de forma segura 1x1 para evitar el error de "Series is ambiguous"
+    # Buscamos las columnas de forma segura 1x1
     for col in df_config.columns:
         col_str = df_config[col].astype(str)
         if col_str.str.contains("Espacios Bloqueados", case=False, na=False).any():
@@ -105,6 +106,8 @@ def cargar_datos():
         if col_str.str.contains("Avisar al Profesor", case=False, na=False).any() or \
            col_str.str.contains("Desplaza a:", case=False, na=False).any():
             col_desplaza = col
+        if col_str.str.contains("MOTIVO", case=False, na=False).any():
+            col_motivo = col
             
     if col_avisos is not None:
         for idx, row in df_config.iterrows():
@@ -114,11 +117,17 @@ def cargar_datos():
             if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
                 texto_final = aviso_ppal
                 
+                # Si encontramos el motivo, lo sumamos
+                if col_motivo is not None:
+                    aviso_motivo = str(row[col_motivo]).strip()
+                    if aviso_motivo and aviso_motivo.upper() not in ["", "NAN", "MOTIVO", "NONE"]:
+                        texto_final += f" 👉 *Motivo: {aviso_motivo}*"
+                
                 # Si encontramos la columna del profe, la pegamos
                 if col_desplaza is not None:
                     aviso_profe = str(row[col_desplaza]).strip()
                     if aviso_profe and aviso_profe.upper() not in ["", "NAN", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
-                        texto_final = f"{aviso_ppal}   {aviso_profe}"
+                        texto_final += f"   {aviso_profe}"
                         
                 if texto_final not in avisos_col_d:
                     avisos_col_d.append(texto_final)
