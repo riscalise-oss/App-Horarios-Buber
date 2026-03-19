@@ -92,6 +92,34 @@ def cargar_datos():
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
+    # ==============================================================================
+    # 🚀 NUEVO MOTOR: FILTRAR VIEJOS Y ORDENAR RESERVAS POR FECHA 🚀
+    # ==============================================================================
+    col_fecha = None
+    # 1. Buscamos qué columna tiene la palabra "FECHA" en los encabezados
+    for col in df_config.columns:
+        if df_config[col].astype(str).str.upper().str.contains("FECHA", na=False).any():
+            col_fecha = col
+            break
+            
+    # Fallback: Si no encuentra la palabra "FECHA", probamos con la Columna F (índice 5)
+    if col_fecha is None and len(df_config.columns) > 5:
+        if pd.to_datetime(df_config[5], errors='coerce', dayfirst=True).notna().sum() > 0:
+            col_fecha = 5
+
+    if col_fecha is not None:
+        # Convertimos la columna detectada a fechas reales (día/mes/año)
+        df_config['TEMP_FECHA'] = pd.to_datetime(df_config[col_fecha], errors='coerce', dayfirst=True)
+        hoy = pd.Timestamp('today').normalize()
+        
+        # 2. FILTRAR: Mantenemos solo filas >= hoy (y los encabezados que darán "NaT")
+        mask = df_config['TEMP_FECHA'].isna() | (df_config['TEMP_FECHA'] >= hoy)
+        df_config = df_config[mask]
+        
+        # 3. ORDENAR: Ordenamos cronológicamente (los títulos quedan arriba)
+        df_config = df_config.sort_values(by='TEMP_FECHA', na_position='first')
+    # ==============================================================================
+    
     # -- OPTIMIZACIÓN 1: Búsqueda Segura de Avisos (AHORA CON MOTIVO) --
     avisos_col_d = []
     col_avisos = None
