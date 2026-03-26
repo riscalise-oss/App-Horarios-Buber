@@ -93,40 +93,41 @@ def cargar_datos():
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
     # ==============================================================================
-    # 🚀 NUEVO MOTOR: FILTRAR VIEJOS Y ORDENAR RESERVAS POR FECHA 🚀
+    # 🚀 MOTOR DE FECHAS Y FILTRADO 🚀
     # ==============================================================================
     col_fecha = None
-    # 1. Buscamos qué columna tiene la palabra "FECHA" en los encabezados
     for col in df_config.columns:
         if df_config[col].astype(str).str.upper().str.contains("FECHA", na=False).any():
             col_fecha = col
             break
             
-    # Fallback: Si no encuentra la palabra "FECHA", probamos con la Columna F (índice 5)
     if col_fecha is None and len(df_config.columns) > 5:
         if pd.to_datetime(df_config[5], errors='coerce', dayfirst=True).notna().sum() > 0:
             col_fecha = 5
 
+    hoy = pd.Timestamp('today').normalize()
+    manana = hoy + pd.Timedelta(days=1)
+    limite_2_semanas = manana + pd.Timedelta(days=14)
+
     if col_fecha is not None:
-        # Convertimos la columna detectada a fechas reales (día/mes/año)
         df_config['TEMP_FECHA'] = pd.to_datetime(df_config[col_fecha], errors='coerce', dayfirst=True)
-        hoy = pd.Timestamp('today').normalize()
-        
-        # 2. FILTRAR: Mantenemos solo filas >= hoy (y los encabezados que darán "NaT")
+        # FILTRAR: Mantenemos solo filas >= hoy
         mask = df_config['TEMP_FECHA'].isna() | (df_config['TEMP_FECHA'] >= hoy)
         df_config = df_config[mask]
-        
-        # 3. ORDENAR: Ordenamos cronológicamente (los títulos quedan arriba)
         df_config = df_config.sort_values(by='TEMP_FECHA', na_position='first')
+    else:
+        # Si por algún motivo no hay fecha, creamos columna vacía para que no falle
+        df_config['TEMP_FECHA'] = pd.NaT
     # ==============================================================================
     
-    # -- OPTIMIZACIÓN 1: Búsqueda Segura de Avisos (AHORA CON MOTIVO) --
-    avisos_col_d = []
+    # -- OPTIMIZACIÓN 1: Búsqueda Segura de Avisos CLASIFICADOS POR FECHA --
+    # Ahora usamos un diccionario en lugar de una lista simple
+    avisos = {"hoy": [], "manana": [], "proximas": [], "futuras": []}
+    
     col_avisos = None
     col_desplaza = None
     col_motivo = None
     
-    # Buscamos las columnas de forma segura 1x1
     for col in df_config.columns:
         col_str = df_config[col].astype(str)
         if col_str.str.contains("Espacios Bloqueados", case=False, na=False).any():
@@ -137,36 +138,46 @@ def cargar_datos():
         if col_str.str.contains("MOTIVO", case=False, na=False).any():
             col_motivo = col
             
+    # Función auxiliar para procesar y agrupar el texto
+    def procesar_y_guardar_aviso(texto_base, fecha_reserva):
+        if pd.isna(fecha_reserva) or fecha_reserva == hoy:
+            if texto_base not in avisos["hoy"]: avisos["hoy"].append(texto_base)
+        elif fecha_reserva == manana:
+            if texto_base not in avisos["manana"]: avisos["manana"].append(texto_base)
+        elif fecha_reserva <= limite_2_semanas:
+            fecha_str = fecha_reserva.strftime('%d/%m')
+            texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
+            if texto_con_fecha not in avisos["proximas"]: avisos["proximas"].append(texto_con_fecha)
+        else:
+            fecha_str = fecha_reserva.strftime('%d/%m')
+            texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
+            if texto_con_fecha not in avisos["futuras"]: avisos["futuras"].append(texto_con_fecha)
+
     if col_avisos is not None:
         for idx, row in df_config.iterrows():
             aviso_ppal = str(row[col_avisos]).strip()
             
-            # Filtramos celdas vacías o los títulos
             if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
                 texto_final = aviso_ppal
                 
-                # Si encontramos el motivo, lo sumamos
                 if col_motivo is not None:
                     aviso_motivo = str(row[col_motivo]).strip()
                     if aviso_motivo and aviso_motivo.upper() not in ["", "NAN", "MOTIVO", "NONE"]:
                         texto_final += f" 👉 *Motivo: {aviso_motivo}*"
                 
-                # Si encontramos la columna del profe, la pegamos
                 if col_desplaza is not None:
                     aviso_profe = str(row[col_desplaza]).strip()
                     if aviso_profe and aviso_profe.upper() not in ["", "NAN", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
                         texto_final += f"   {aviso_profe}"
                         
-                if texto_final not in avisos_col_d:
-                    avisos_col_d.append(texto_final)
+                procesar_y_guardar_aviso(texto_final, row['TEMP_FECHA'])
     else:
-        # Plan de respaldo (Busca iconos de alerta directamente en toda la fila)
+        # Plan de respaldo
         for idx, row in df_config.iterrows():
             celdas_con_alerta = [str(x).strip() for x in row.values if pd.notna(x) and ("⚠️" in str(x) or "🔴" in str(x) or "🟡" in str(x))]
             if celdas_con_alerta:
                 texto_unido = "   ".join(celdas_con_alerta)
-                if texto_unido not in avisos_col_d:
-                    avisos_col_d.append(texto_unido)
+                procesar_y_guardar_aviso(texto_unido, row['TEMP_FECHA'])
 
     # -- OPTIMIZACIÓN 2: Limpieza de Columnas Vectorizada --
     if 'DIA' in df_o.columns:
@@ -190,10 +201,10 @@ def cargar_datos():
     else:
         espacios = []
     
-    return df_o, avisos_col_d, espacios
+    return df_o, avisos, espacios
 
 try:
-    df_ocupados, avisos_col_d, todos_los_espacios = cargar_datos()
+    df_ocupados, avisos_agrupados, todos_los_espacios = cargar_datos()
 
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
@@ -259,19 +270,15 @@ try:
         st.subheader("🟢 Ámbitos Libres")
         
         hay_libres = False
-        
         if libres_completos:
             st.success("**Bloque Completo:**\n\n ✅ " + " | ✅ ".join(libres_completos))
             hay_libres = True
-            
         if libres_medio_1:
             st.info("⏳ **1er Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_1))
             hay_libres = True
-            
         if libres_medio_2:
             st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_2))
             hay_libres = True
-            
         if libres_otros:
             st.info("⏳ **Otros libres parciales:**\n\n ✔️ " + " | ✔️ ".join(libres_otros))
             hay_libres = True
@@ -279,9 +286,26 @@ try:
         if not hay_libres:
             st.error("No hay espacios libres en este bloque.")
 
-        st.subheader("📌 Reservas Especiales del Día")
-        if avisos_col_d: st.warning("\n\n".join([f"**•** {a}" for a in avisos_col_d]))
-        else: st.info("No hay reservas especiales hoy.")
+        st.divider()
+        st.subheader("📌 Reservas Especiales")
+        
+        # --- DESPLIEGUE CLASIFICADO DE RESERVAS ---
+        if avisos_agrupados["hoy"]:
+            st.warning("**📍 HOY:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["hoy"]]))
+        else:
+            st.success("**📍 HOY:** No hay reservas especiales.")
+
+        if avisos_agrupados["manana"]:
+            st.info("**⏭️ MAÑANA:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["manana"]]))
+
+        if avisos_agrupados["proximas"]:
+            st.info("**📅 PRÓXIMAS 2 SEMANAS:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["proximas"]]))
+
+        if avisos_agrupados["futuras"]:
+            with st.expander("📂 Ver reservas a largo plazo (después de 2 semanas)", expanded=False):
+                st.write("\n\n".join([f"**•** {a}" for a in avisos_agrupados["futuras"]]))
+
+        st.divider()
 
         with st.expander("🔴 Ver Clases Regulares", expanded=False):
             if not ocu.empty:
