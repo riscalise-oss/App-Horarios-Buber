@@ -2,9 +2,17 @@ import streamlit as st
 import pandas as pd
 import base64
 import os
+import unicodedata
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
+
+# ==============================================================================
+# --- FUNCIÓN PARA QUITAR TILDES ---
+# ==============================================================================
+def quitar_tildes(s):
+    return ''.join(c for c in unicodedata.normalize('NFD', str(s))
+                   if unicodedata.category(c) != 'Mn').upper().strip()
 
 # ==============================================================================
 # --- FUNCIÓN PARA EL FONDO INSTITUCIONAL ---
@@ -84,7 +92,7 @@ LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzj
 @st.cache_data(ttl=60)
 def cargar_datos():
     df_o = pd.read_csv(LINK_OCUPADOS)
-    df_o.columns = [str(c).upper().strip().replace('Í', 'I') for c in df_o.columns]
+    df_o.columns = [quitar_tildes(c) for c in df_o.columns]
     df_o = df_o.loc[:, ~df_o.columns.duplicated()].copy()
     
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
@@ -180,8 +188,8 @@ def cargar_datos():
                 procesar_y_guardar_aviso(texto_unido, row['TEMP_FECHA'], row)
 
     if 'DIA' in df_o.columns:
-        df_o['DIA'] = df_o['DIA'].astype(str).str.strip().str.upper().str.replace('Í', 'I')
-        orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "MIÉRCOLES": 3, "JUEVES": 4, "VIERNES": 5}
+        df_o['DIA'] = df_o['DIA'].astype(str).map(quitar_tildes)
+        orden_dias = {"LUNES": 1, "MARTES": 2, "MIERCOLES": 3, "JUEVES": 4, "VIERNES": 5}
         df_o['ORDEN_DIA'] = df_o['DIA'].map(orden_dias)
 
     if 'BLOQUE' in df_o.columns:
@@ -294,7 +302,7 @@ try:
         # 🚀 NUEVO RADAR: BÚSQUEDA ESPECÍFICA POR DÍA Y BLOQUE 🚀
         # =========================================================================
         reservas_dia_bloque = []
-        dia_buscado = dia_elegido.replace('É', 'E').replace('Í', 'I')
+        dia_buscado = quitar_tildes(dia_elegido)
         hoy_ts = pd.Timestamp('today').normalize()
         limite_2_sem_ts = hoy_ts + pd.Timedelta(days=15)
         
