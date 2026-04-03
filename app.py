@@ -252,9 +252,11 @@ try:
                     ocupa_todo = False
                     
                     for sub in df_clases['SUBBLOQUE'].astype(str).str.strip().str.upper():
-                        if sub == "NAN" or sub == "": ocupa_todo = True
-                        elif sub.endswith("1"): ocupa_1 = True
-                        elif sub.endswith("2"): ocupa_2 = True
+                        sub_texto = str(sub) # 🛡️ Defensa extra: forzamos a que sea texto sí o sí
+                        
+                        if sub_texto == "NAN" or sub_texto == "": ocupa_todo = True
+                        elif sub_texto.endswith("1"): ocupa_1 = True
+                        elif sub_texto.endswith("2"): ocupa_2 = True
                         else: ocupa_todo = True
                             
                     if ocupa_todo or (ocupa_1 and ocupa_2): pass 
@@ -391,29 +393,4 @@ try:
         if 'BLOQUE' in res_e.columns:
             res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
             
-        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
-        st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
-
-except Exception as e:
-    st.error(f"Error técnico: {e}")
-
-# --- PIE DE PÁGINA PERSONALIZADO ---
-st.markdown("""
-    <style>
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        text-align: center;
-        font-size: 12px;
-        color: grey;
-        padding: 10px;
-        background-color: transparent;
-        z-index: 100;
-    }
-    </style>
-    <div class="footer">
-        by Richard
-    </div>
-""", unsafe_allow_html=True)
+        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE
