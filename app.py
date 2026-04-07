@@ -36,7 +36,7 @@ def aplicar_fondo_institucional(archivo_imagen):
                 background-size: cover;
                 background-repeat: no-repeat;
                 background-position: center;
-                background-attachment: fixed; /* Mantiene el fondo quieto al hacer scroll */
+                background-attachment: fixed;
             }}
             </style>
             '''
@@ -45,7 +45,7 @@ def aplicar_fondo_institucional(archivo_imagen):
         except Exception as e:
             st.error(f"Error al cargar el fondo: {e}")
     else:
-        pass # Si no hay fondo, no mostramos error para no ensuciar la app
+        pass 
 # ==============================================================================
 
 # --- CSS LIMPIO Y SEGURO ---
@@ -117,7 +117,6 @@ def cargar_datos():
 
     if col_fecha is not None:
         df_config['TEMP_FECHA'] = pd.to_datetime(df_config[col_fecha], errors='coerce', dayfirst=True)
-        # FILTRAR: Mantenemos solo filas >= hoy
         mask = df_config['TEMP_FECHA'].isna() | (df_config['TEMP_FECHA'] >= hoy)
         df_config = df_config[mask]
         df_config = df_config.sort_values(by='TEMP_FECHA', na_position='first')
@@ -125,7 +124,7 @@ def cargar_datos():
         df_config['TEMP_FECHA'] = pd.NaT
 
     avisos = {"hoy": [], "manana": [], "proximas": [], "futuras": []}
-    lista_todas_reservas = [] # <-- NUESTRA LISTA MAESTRA PARA EL RADAR
+    lista_todas_reservas = [] 
     
     col_avisos = None
     col_desplaza = None
@@ -155,7 +154,6 @@ def cargar_datos():
             texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
             if texto_con_fecha not in avisos["futuras"]: avisos["futuras"].append(texto_con_fecha)
             
-        # Guardamos los datos puros para el radar
         lista_todas_reservas.append({
             'texto_base': texto_base,
             'fecha': fecha_reserva,
@@ -166,19 +164,16 @@ def cargar_datos():
         for idx, row in df_config.iterrows():
             aviso_ppal = str(row[col_avisos]).strip()
             
-            # 🛡️ Aplicamos el escudo agregando "NAT"
             if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "NAT", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
                 texto_final = aviso_ppal
                 
                 if col_motivo is not None:
                     aviso_motivo = str(row[col_motivo]).strip()
-                    # 🛡️ Aplicamos el escudo agregando "NAT"
                     if aviso_motivo and aviso_motivo.upper() not in ["", "NAN", "NAT", "MOTIVO", "NONE"]:
                         texto_final += f" 👉 *Motivo: {aviso_motivo}*"
                 
                 if col_desplaza is not None:
                     aviso_profe = str(row[col_desplaza]).strip()
-                    # 🛡️ Aplicamos el escudo agregando "NAT"
                     if aviso_profe and aviso_profe.upper() not in ["", "NAN", "NAT", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
                         texto_final += f"   {aviso_profe}"
                         
@@ -263,7 +258,7 @@ try:
                     ocupa_todo = False
                     
                     for sub in df_clases['SUBBLOQUE'].astype(str).str.strip().str.upper():
-                        sub_texto = str(sub) # 🛡️ Defensa extra: forzamos a que sea texto sí o sí
+                        sub_texto = str(sub) 
                         
                         if sub_texto == "NAN" or sub_texto == "": ocupa_todo = True
                         elif sub_texto.endswith("1"): ocupa_1 = True
@@ -302,42 +297,46 @@ try:
         st.subheader("📌 Reservas Especiales")
 
         # =========================================================================
-        # 🚀 NUEVO RADAR: BÚSQUEDA ESPECÍFICA POR DÍA Y BLOQUE 🚀
+        # 🚀 RADAR MEJORADO: SEPARA PRÓXIMAS Y FUTURAS 🚀
         # =========================================================================
-        reservas_dia_bloque = []
+        reservas_radar_cercanas = []
+        reservas_radar_lejanas = []
         dia_buscado = quitar_tildes(dia_elegido)
         hoy_ts = pd.Timestamp('today').normalize()
         limite_2_sem_ts = hoy_ts + pd.Timedelta(days=15)
         
         for res in lista_todas_reservas:
             fecha = res['fecha']
-            # Escaneamos todas las reservas de hoy a 2 semanas
-            if pd.notna(fecha) and hoy_ts <= fecha <= limite_2_sem_ts:
+            # Escaneamos TODAS las reservas futuras, sin importar qué tan lejos estén
+            if pd.notna(fecha) and fecha >= hoy_ts:
                 dia_ingles = fecha.day_name()
                 mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES'}
                 
-                # 1. Si el día de la semana coincide...
+                # Si el día de la semana coincide...
                 if mapa_dias.get(dia_ingles) == dia_buscado:
                     coincide_bloque = False
                     tiene_algun_bloque = False
                     
                     for val in res['row'].values:
                         val_str = str(val).strip().upper()
-                        # Separar el texto para encontrar números aislados
                         palabras = val_str.replace(',', ' ').replace('.', ' ').replace('-', ' ').split()
                         
-                        # Si encuentra el bloque exacto
                         if str(bloque_elegido) in palabras or f"BLOQUE {bloque_elegido}" in val_str:
                             coincide_bloque = True
                             
-                        # Para saber si la reserva especifica algún bloque distinto o si es para "todo el día"
                         if set(palabras).intersection({"1", "2", "3", "4", "5", "6"}) or "BLOQUE" in val_str:
                             tiene_algun_bloque = True
                             
-                    # Si coincide tu bloque, o si la reserva no nombra ningún bloque (se asume todo el día)
+                    # Si coincide tu bloque o es para todo el día...
                     if coincide_bloque or not tiene_algun_bloque:
-                        fecha_str = fecha.strftime('%d/%m')
-                        reservas_dia_bloque.append(f"🎯 **[{fecha_str}]** {res['texto_base']}")
+                        # Si es inminente (dentro de 15 días)
+                        if fecha <= limite_2_sem_ts:
+                            fecha_str = fecha.strftime('%d/%m')
+                            reservas_radar_cercanas.append(f"🎯 **[{fecha_str}]** {res['texto_base']}")
+                        else:
+                            # Si es lejana, le agregamos el año para que sea más claro
+                            fecha_lejana_str = fecha.strftime('%d/%m/%Y')
+                            reservas_radar_lejanas.append(f"🎯 **[{fecha_lejana_str}]** {res['texto_base']}")
         # =========================================================================
 
         # a) HOY
@@ -350,18 +349,22 @@ try:
         if avisos_agrupados["manana"]:
             st.info("**⏭️ MAÑANA:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["manana"]]))
 
-        # c) ESPECÍFICAS DÍA Y BLOQUE (El radar)
-        if reservas_dia_bloque:
-            st.error(f"🚨 **ATENCIÓN: Hay reservas futuras para los días {dia_elegido} en este bloque:**\n\n" + "\n\n".join([f"**•** {a}" for a in reservas_dia_bloque]))
+        # c) RADAR: CERCANAS Y LEJANAS PARA ESTE DÍA/BLOQUE
+        if reservas_radar_cercanas:
+            st.error(f"🚨 **ATENCIÓN: Hay reservas próximas para los {dia_elegido} en este bloque:**\n\n" + "\n\n".join([f"**•** {a}" for a in reservas_radar_cercanas]))
+            
+        if reservas_radar_lejanas:
+            with st.expander(f"🔮 Ver TODAS las reservas a largo plazo para {dia_elegido} - Bloque {bloque_elegido}", expanded=False):
+                st.write("\n\n".join([f"**•** {a}" for a in reservas_radar_lejanas]))
 
-        # d) TODAS LAS PRÓXIMAS 2 SEMANAS (Ocultas)
+        # d) TODAS LAS PRÓXIMAS 2 SEMANAS (Ocultas - Generales)
         with st.expander("📅 Ver TODAS las reservas generales de las próximas 2 semanas", expanded=False):
             if avisos_agrupados["proximas"]:
                 st.write("\n\n".join([f"**•** {a}" for a in avisos_agrupados["proximas"]]))
             else:
                 st.write("No hay otras reservas a corto plazo.")
 
-        # e) LARGO PLAZO
+        # e) LARGO PLAZO GENERALES
         if avisos_agrupados["futuras"]:
             with st.expander("📂 Ver reservas a largo plazo (después de 2 semanas)", expanded=False):
                 st.write("\n\n".join([f"**•** {a}" for a in avisos_agrupados["futuras"]]))
