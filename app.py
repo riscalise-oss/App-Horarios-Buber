@@ -166,17 +166,20 @@ def cargar_datos():
         for idx, row in df_config.iterrows():
             aviso_ppal = str(row[col_avisos]).strip()
             
-            if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
+            # 🛡️ Aplicamos el escudo agregando "NAT"
+            if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "NAT", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
                 texto_final = aviso_ppal
                 
                 if col_motivo is not None:
                     aviso_motivo = str(row[col_motivo]).strip()
-                    if aviso_motivo and aviso_motivo.upper() not in ["", "NAN", "MOTIVO", "NONE"]:
+                    # 🛡️ Aplicamos el escudo agregando "NAT"
+                    if aviso_motivo and aviso_motivo.upper() not in ["", "NAN", "NAT", "MOTIVO", "NONE"]:
                         texto_final += f" 👉 *Motivo: {aviso_motivo}*"
                 
                 if col_desplaza is not None:
                     aviso_profe = str(row[col_desplaza]).strip()
-                    if aviso_profe and aviso_profe.upper() not in ["", "NAN", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
+                    # 🛡️ Aplicamos el escudo agregando "NAT"
+                    if aviso_profe and aviso_profe.upper() not in ["", "NAN", "NAT", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
                         texto_final += f"   {aviso_profe}"
                         
                 procesar_y_guardar_aviso(texto_final, row['TEMP_FECHA'], row)
