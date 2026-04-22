@@ -5,8 +5,28 @@ import os
 import unicodedata
 import re  # <-- IMPORTANTE: Nueva librería para búsqueda inteligente de texto
 
+# --- NUEVAS LIBRERÍAS PARA GOOGLE SHEETS ---
+import gspread
+from google.oauth2.service_account import Credentials
+
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
+
+# ==============================================================================
+# --- CONEXIÓN A GOOGLE SHEETS ---
+# ==============================================================================
+try:
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    credenciales = Credentials.from_service_account_info(
+        st.secrets["google_service_account"],
+        scopes=scopes
+    )
+    cliente = gspread.authorize(credenciales)
+except Exception as e:
+    st.warning("⚠️ Todavía no se configuraron los secretos de Google. La función de reservar no estará disponible.")
 
 # ==============================================================================
 # --- FUNCIÓN PARA QUITAR TILDES ---
@@ -328,7 +348,7 @@ try:
                 
                 for val in row_data.values:
                     val_str = str(val).strip().upper()
-                    # Extrae todos los números sueltos usando Regex (atrapa 3er, 3ro, bloque 3, B3, etc.)
+                    # Extrae todos los números sueltos usando Regex
                     numeros_en_celda = re.findall(r'\d+', val_str)
                     
                     if str(bloque_elegido) in numeros_en_celda or f"BLOQUE {bloque_elegido}" in val_str or f"B{bloque_elegido}" in val_str:
@@ -397,6 +417,64 @@ try:
                     
                 cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
+
+        # =========================================================================
+        # 🚀 FORMULARIO DE RESERVAS (NUEVO) 🚀
+        # =========================================================================
+        st.divider()
+        st.subheader("📝 Registrar Nueva Reserva")
+        
+        # Pre-selección inteligente del Día y Bloque
+        opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+        dia_limpio = str(dia_elegido).capitalize()
+        if dia_limpio == "Miercoles": dia_limpio = "Miércoles"
+        index_dia = opciones_dias.index(dia_limpio) if dia_limpio in opciones_dias else 0
+        
+        index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
+
+        with st.form("formulario_reserva"):
+            st.caption("Al guardar, la reserva se escribirá automáticamente en la hoja 'Espacios Libres' del Excel.")
+            col1, col2 = st.columns(2)
+            with col1:
+                fecha_input = st.date_input("Fecha")
+                dia_input = st.selectbox("Día", opciones_dias, index=index_dia)
+                bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
+            with col2:
+                espacio_input = st.text_input("Espacio (Ej: Gimnasio Secundaria)")
+                motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
+                avisar_input = st.text_input("Avisar al Profesor (Opcional)")
+                
+            boton_guardar = st.form_submit_button("Guardar Reserva")
+
+        if boton_guardar:
+            if espacio_input and motivo_input:
+                try:
+                    documento = cliente.open("2026 ámbitos automatizado 2026")
+                    hoja = documento.worksheet("Espacios Libres")
+                    
+                    # Buscamos dónde escribir (primera fila vacía en la columna F)
+                    columna_f = hoja.col_values(6) 
+                    siguiente_fila = len(columna_f) + 1
+                    
+                    rango = f"F{siguiente_fila}:K{siguiente_fila}"
+                    valores = [[
+                        fecha_input.strftime("%d/%m/%Y"), 
+                        dia_input, 
+                        bloque_input, 
+                        espacio_input, 
+                        motivo_input, 
+                        avisar_input
+                    ]]
+                    
+                    hoja.update(range_name=rango, values=valores)
+                    
+                    st.success("✅ ¡Reserva guardada con éxito! (Nota: puede tardar hasta 1 minuto en aparecer en el buscador).")
+                    st.balloons()
+                    
+                except Exception as e:
+                    st.error(f"Hubo un error al intentar guardar. Verificá los permisos del robot. Detalles: {e}")
+            else:
+                st.warning("⚠️ Por favor, completá el Espacio y el Motivo antes de guardar.")
 
     # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
     with tab2:
