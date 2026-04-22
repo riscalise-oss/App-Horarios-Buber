@@ -328,11 +328,11 @@ try:
             es_dia_buscado = False
             es_futura_o_hoy = False
             
-            # 1. Chequeamos si el día de la semana coincide
             if pd.notna(fecha):
                 if fecha >= hoy_ts:
                     es_futura_o_hoy = True
                     mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES'}
+                    # ACÁ ESTÁ LA LÍNEA CORREGIDA DE LOS PARÉNTESIS
                     if mapa_dias.get(fecha.day_name()) == dia_buscado:
                         es_dia_buscado = True
             else:
@@ -415,7 +415,6 @@ try:
         st.divider()
         st.subheader("📝 Registrar Nueva Reserva")
         
-        # Lista exacta extraída de tu imagen
         lista_espacios = [
             "7º 13", "7º 14", "7º 15", "1º 31", "1º 32", "1º 33", "1º 34",
             "2º 11", "2º 12", "2º 16", "2º PB1", "3º 23", "3º 24", "3º 25",
@@ -435,7 +434,6 @@ try:
             with col1:
                 fecha_input = st.date_input("Fecha")
                 
-                # Cálculo automático del día
                 opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                 dia_calculado = opciones_dias[fecha_input.weekday()]
                 st.info(f"📅 Día automático: **{dia_calculado}**")
@@ -454,21 +452,26 @@ try:
                     documento = cliente.open("2026 ámbitos automatizado 2026")
                     hoja = documento.worksheet("Espacios Libres")
                     
-                    # Buscamos dónde escribir (primera fila vacía en la columna F)
                     columna_f = hoja.col_values(6) 
                     siguiente_fila = len(columna_f) + 1
                     
-                    # Escribimos de la columna F a la J (5 columnas en total)
                     rango = f"F{siguiente_fila}:J{siguiente_fila}"
+                    
+                    # CORRECCIÓN DE FORMATO: int(bloque_input)
                     valores = [[
                         fecha_input.strftime("%d/%m/%Y"), 
                         dia_calculado, 
-                        bloque_input, 
+                        int(bloque_input), 
                         espacio_input, 
                         motivo_input
                     ]]
                     
-                    hoja.update(range_name=rango, values=valores)
+                    # CORRECCIÓN DE FORMATO: value_input_option='USER_ENTERED'
+                    hoja.update(
+                        range_name=rango, 
+                        values=valores,
+                        value_input_option='USER_ENTERED'
+                    )
                     
                     st.success(f"✅ ¡Reserva guardada con éxito para el {dia_calculado} {fecha_input.strftime('%d/%m/%Y')} en {espacio_input}!")
                     st.balloons()
