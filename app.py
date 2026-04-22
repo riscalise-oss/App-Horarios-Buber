@@ -62,7 +62,6 @@ def aplicar_fondo_institucional(archivo_imagen):
             st.error(f"Error al cargar el fondo: {e}")
     else:
         pass 
-# ==============================================================================
 
 # --- CSS LIMPIO Y SEGURO ---
 ocultar_menu = """
@@ -114,9 +113,7 @@ def cargar_datos():
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
-    # ==============================================================================
     # 🚀 MOTOR DE FECHAS Y FILTRADO 🚀
-    # ==============================================================================
     col_fecha = None
     for col in df_config.columns:
         if df_config[col].astype(str).str.upper().str.contains("FECHA", na=False).any():
@@ -371,7 +368,6 @@ try:
                         if texto_generico not in reservas_radar_todas:
                             reservas_radar_todas.append(texto_generico)
                             reservas_radar_cercanas.append(texto_generico)
-        # =========================================================================
 
         if avisos_agrupados["hoy"]:
             st.warning("**📍 HOY:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["hoy"]]))
@@ -409,12 +405,12 @@ try:
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
         # =========================================================================
-        # 🚀 FORMULARIO DE RESERVAS (MODIFICADO PARA ACTUALIZAR DÍA AL INSTANTE) 🚀
+        # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN DE DUPLICADOS) 🚀
         # =========================================================================
         st.divider()
         st.subheader("📝 Registrar Nueva Reserva")
         
-        lista_espacios = [
+        lista_espacios_form = [
             "7º 13", "7º 14", "7º 15", "1º 31", "1º 32", "1º 33", "1º 34",
             "2º 11", "2º 12", "2º 16", "2º PB1", "3º 23", "3º 24", "3º 25",
             "3º 26", "4º 21", "4º 22", "4º 41", "4º 46", "5º 42", "5º 43",
@@ -426,27 +422,19 @@ try:
         
         index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
 
-        # --- 1. FECHA Y DÍA AFUERA DEL FORMULARIO ---
-        # Al estar afuera, Streamlit detecta el cambio al instante.
         fecha_input = st.date_input("Fecha de la reserva")
-        
         opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         dia_calculado = opciones_dias[fecha_input.weekday()]
         st.info(f"📅 Día seleccionado: **{dia_calculado}**")
 
-        # --- 2. EL RESTO DEL FORMULARIO ADENTRO ---
         with st.form("formulario_reserva", clear_on_submit=True):
             st.caption("Al guardar, la reserva se escribirá automáticamente en la hoja 'Espacios Libres' del Excel.")
-            
             col1, col2 = st.columns(2)
-            
             with col1:
                 bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
-                espacio_input = st.selectbox("Espacio", lista_espacios)
-                
+                espacio_input = st.selectbox("Espacio", lista_espacios_form)
             with col2:
                 motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
-                
             boton_guardar = st.form_submit_button("Guardar Reserva")
 
         if boton_guardar:
@@ -455,32 +443,34 @@ try:
                     documento = cliente.open("2026 ámbitos automatizado 2026")
                     hoja = documento.worksheet("Espacios Libres")
                     
-                    columna_f = hoja.col_values(6) 
-                    siguiente_fila = len(columna_f) + 1
+                    # --- COMPROBACIÓN DE CHOQUES ---
+                    datos_hoja = hoja.get_all_values()
+                    f_nueva = fecha_input.strftime("%d/%m/%Y")
+                    b_nuevo = str(bloque_input)
+                    e_nuevo = str(espacio_input).strip().upper()
                     
-                    rango = f"F{siguiente_fila}:J{siguiente_fila}"
+                    ya_existe = False
+                    for fila in datos_hoja:
+                        if len(fila) >= 9:
+                            if fila[5] == f_nueva and str(fila[7]) == b_nuevo and str(fila[8]).strip().upper() == e_nuevo:
+                                ya_existe = True
+                                break
                     
-                    valores = [[
-                        fecha_input.strftime("%d/%m/%Y"), 
-                        dia_calculado, 
-                        int(bloque_input), 
-                        espacio_input, 
-                        motivo_input
-                    ]]
-                    
-                    hoja.update(
-                        range_name=rango, 
-                        values=valores,
-                        value_input_option='USER_ENTERED'
-                    )
-                    
-                    st.success(f"✅ ¡Reserva guardada con éxito para el {dia_calculado} {fecha_input.strftime('%d/%m/%Y')} en {espacio_input}!")
-                    st.balloons()
-                    
+                    if ya_existe:
+                        st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
+                    else:
+                        columna_f = hoja.col_values(6) 
+                        siguiente_fila = len(columna_f) + 1
+                        rango = f"F{siguiente_fila}:J{siguiente_fila}"
+                        valores = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input]]
+                        hoja.update(range_name=rango, values=valores, value_input_option='USER_ENTERED')
+                        st.success(f"✅ Reserva guardada con éxito!")
+                        st.balloons()
+                        st.cache_data.clear()
                 except Exception as e:
-                    st.error(f"Hubo un error al intentar guardar. Verificá los permisos del robot. Detalles: {e}")
+                    st.error(f"Error al guardar: {e}")
             else:
-                st.warning("⚠️ Por favor, completá el Motivo antes de guardar.")
+                st.warning("⚠️ Completá el motivo.")
 
     # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
     with tab2:
@@ -490,12 +480,9 @@ try:
         sel = st.selectbox(f"Selecciona {tipo}:", lista)
         st.divider()
         st.header(f"Agenda de: {sel}")
-        
         res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
-        
         if 'BLOQUE' in res.columns:
             res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
-            
         cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
         st.dataframe(res[cols], hide_index=True, use_container_width=True)
 
@@ -504,35 +491,19 @@ try:
         espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
         st.divider()
         st.header(f"Agenda de: {espacio_sel}")
-        
         res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
-        
         if 'BLOQUE' in res_e.columns:
             res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
-            
         cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
         st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error técnico: {e}")
 
-# --- PIE DE PÁGINA PERSONALIZADO ---
+# --- PIE DE PÁGINA ---
 st.markdown("""
     <style>
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        text-align: center;
-        font-size: 12px;
-        color: grey;
-        padding: 10px;
-        background-color: transparent;
-        z-index: 100;
-    }
+    .footer { position: fixed; left: 0; bottom: 0; width: 100%; text-align: center; font-size: 12px; color: grey; padding: 10px; background-color: transparent; z-index: 100; }
     </style>
-    <div class="footer">
-        by Richard
-    </div>
+    <div class="footer">by Richard</div>
 """, unsafe_allow_html=True)
