@@ -409,7 +409,7 @@ try:
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
         # =========================================================================
-        # 🚀 FORMULARIO DE RESERVAS (MODIFICADO PARA ACTUALIZAR DÍA AL INSTANTE) 🚀
+        # 🚀 FORMULARIO DE RESERVAS (CON VALIDACIÓN DE DUPLICADOS) 🚀
         # =========================================================================
         st.divider()
         st.subheader("📝 Registrar Nueva Reserva")
@@ -426,27 +426,19 @@ try:
         
         index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
 
-        # --- 1. FECHA Y DÍA AFUERA DEL FORMULARIO ---
-        # Al estar afuera, Streamlit detecta el cambio al instante.
         fecha_input = st.date_input("Fecha de la reserva")
-        
         opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         dia_calculado = opciones_dias[fecha_input.weekday()]
         st.info(f"📅 Día seleccionado: **{dia_calculado}**")
 
-        # --- 2. EL RESTO DEL FORMULARIO ADENTRO ---
         with st.form("formulario_reserva", clear_on_submit=True):
             st.caption("Al guardar, la reserva se escribirá automáticamente en la hoja 'Espacios Libres' del Excel.")
-            
             col1, col2 = st.columns(2)
-            
             with col1:
                 bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
                 espacio_input = st.selectbox("Espacio", lista_espacios)
-                
             with col2:
                 motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
-                
             boton_guardar = st.form_submit_button("Guardar Reserva")
 
         if boton_guardar:
@@ -455,30 +447,51 @@ try:
                     documento = cliente.open("2026 ámbitos automatizado 2026")
                     hoja = documento.worksheet("Espacios Libres")
                     
-                    columna_f = hoja.col_values(6) 
-                    siguiente_fila = len(columna_f) + 1
+                    # --- 🛑 NUEVA LÓGICA: VALIDACIÓN DE DUPLICADOS 🛑 ---
+                    datos_actuales = hoja.get_all_records()
+                    df_check = pd.DataFrame(datos_actuales)
                     
-                    rango = f"F{siguiente_fila}:J{siguiente_fila}"
-                    
-                    valores = [[
-                        fecha_input.strftime("%d/%m/%Y"), 
-                        dia_calculado, 
-                        int(bloque_input), 
-                        espacio_input, 
-                        motivo_input
-                    ]]
-                    
-                    hoja.update(
-                        range_name=rango, 
-                        values=valores,
-                        value_input_option='USER_ENTERED'
-                    )
-                    
-                    st.success(f"✅ ¡Reserva guardada con éxito para el {dia_calculado} {fecha_input.strftime('%d/%m/%Y')} en {espacio_input}!")
-                    st.balloons()
+                    # Convertimos a strings para comparar sin errores de tipo
+                    fecha_str_nueva = fecha_input.strftime("%d/%m/%Y")
+                    bloque_str_nuevo = str(bloque_input)
+                    espacio_str_nuevo = str(espacio_input).strip().upper()
+
+                    # Buscamos si existe la misma combinación (usamos .astype(str) para seguridad)
+                    existe = df_check[
+                        (df_check.iloc[:, 0].astype(str) == fecha_str_nueva) & 
+                        (df_check.iloc[:, 2].astype(str) == bloque_str_nuevo) & 
+                        (df_check.iloc[:, 3].astype(str).str.strip().str.upper() == espacio_str_nuevo)
+                    ]
+
+                    if not existe.empty:
+                        st.error(f"❌ **ERROR:** El espacio **{espacio_input}** ya está reservado para el bloque **{bloque_input}** el día **{fecha_str_nueva}**.")
+                        st.warning(f"Motivo existente: {existe.iloc[0, 4]}")
+                    else:
+                        # Si no existe, procedemos a guardar
+                        columna_f = hoja.col_values(6) 
+                        siguiente_fila = len(columna_f) + 1
+                        rango = f"F{siguiente_fila}:J{siguiente_fila}"
+                        
+                        valores = [[
+                            fecha_str_nueva, 
+                            dia_calculado, 
+                            int(bloque_input), 
+                            espacio_input, 
+                            motivo_input
+                        ]]
+                        
+                        hoja.update(
+                            range_name=rango, 
+                            values=valores,
+                            value_input_option='USER_ENTERED'
+                        )
+                        
+                        st.success(f"✅ ¡Reserva guardada con éxito para el {dia_calculado} {fecha_str_nueva} en {espacio_input}!")
+                        st.balloons()
+                    # ---------------------------------------------------
                     
                 except Exception as e:
-                    st.error(f"Hubo un error al intentar guardar. Verificá los permisos del robot. Detalles: {e}")
+                    st.error(f"Hubo un error al intentar guardar. Detalles: {e}")
             else:
                 st.warning("⚠️ Por favor, completá el Motivo antes de guardar.")
 
