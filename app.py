@@ -313,7 +313,7 @@ try:
         st.subheader("📌 Reservas Especiales")
 
         # =========================================================================
-        # 🚀 RADAR ULTRA-INTELIGENTE CON EXTRACCIÓN DE NÚMEROS 🚀
+        # 🚀 RADAR ULTRA-INTELIGENTE 🚀
         # =========================================================================
         reservas_radar_cercanas = []
         reservas_radar_todas = []
@@ -332,7 +332,6 @@ try:
                 if fecha >= hoy_ts:
                     es_futura_o_hoy = True
                     mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES'}
-                    # ACÁ ESTÁ LA LÍNEA CORREGIDA DE LOS PARÉNTESIS
                     if mapa_dias.get(fecha.day_name()) == dia_buscado:
                         es_dia_buscado = True
             else:
@@ -410,7 +409,7 @@ try:
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
         # =========================================================================
-        # 🚀 FORMULARIO DE RESERVAS (NUEVO) 🚀
+        # 🚀 FORMULARIO DE RESERVAS (MODIFICADO PARA ACTUALIZAR DÍA AL INSTANTE) 🚀
         # =========================================================================
         st.divider()
         st.subheader("📝 Registrar Nueva Reserva")
@@ -427,21 +426,25 @@ try:
         
         index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
 
+        # --- 1. FECHA Y DÍA AFUERA DEL FORMULARIO ---
+        # Al estar afuera, Streamlit detecta el cambio al instante.
+        fecha_input = st.date_input("Fecha de la reserva")
+        
+        opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        dia_calculado = opciones_dias[fecha_input.weekday()]
+        st.info(f"📅 Día seleccionado: **{dia_calculado}**")
+
+        # --- 2. EL RESTO DEL FORMULARIO ADENTRO ---
         with st.form("formulario_reserva", clear_on_submit=True):
             st.caption("Al guardar, la reserva se escribirá automáticamente en la hoja 'Espacios Libres' del Excel.")
+            
             col1, col2 = st.columns(2)
             
             with col1:
-                fecha_input = st.date_input("Fecha")
-                
-                opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-                dia_calculado = opciones_dias[fecha_input.weekday()]
-                st.info(f"📅 Día automático: **{dia_calculado}**")
-                
                 bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
+                espacio_input = st.selectbox("Espacio", lista_espacios)
                 
             with col2:
-                espacio_input = st.selectbox("Espacio", lista_espacios)
                 motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
                 
             boton_guardar = st.form_submit_button("Guardar Reserva")
@@ -457,7 +460,6 @@ try:
                     
                     rango = f"F{siguiente_fila}:J{siguiente_fila}"
                     
-                    # CORRECCIÓN DE FORMATO: int(bloque_input)
                     valores = [[
                         fecha_input.strftime("%d/%m/%Y"), 
                         dia_calculado, 
@@ -466,7 +468,6 @@ try:
                         motivo_input
                     ]]
                     
-                    # CORRECCIÓN DE FORMATO: value_input_option='USER_ENTERED'
                     hoja.update(
                         range_name=rango, 
                         values=valores,
