@@ -333,4 +333,202 @@ try:
                 if fecha >= hoy_ts:
                     es_futura_o_hoy = True
                     mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES'}
-                    if mapa_dias.get(fecha.day_name
+                    if mapa_dias.get(fecha.day_name()) == dia_buscado:
+                        es_dia_buscado = True
+            else:
+                es_futura_o_hoy = True
+                texto_fila = " ".join([str(x).upper() for x in row_data.values])
+                if dia_buscado in texto_fila:
+                    es_dia_buscado = True
+                    
+            if es_futura_o_hoy and es_dia_buscado:
+                coincide_bloque = False
+                tiene_algun_bloque = False
+                
+                for val in row_data.values:
+                    val_str = str(val).strip().upper()
+                    numeros_en_celda = re.findall(r'\d+', val_str)
+                    
+                    if str(bloque_elegido) in numeros_en_celda or f"BLOQUE {bloque_elegido}" in val_str or f"B{bloque_elegido}" in val_str:
+                        coincide_bloque = True
+                        
+                    if set(numeros_en_celda).intersection({"1", "2", "3", "4", "5", "6"}) or "BLOQUE" in val_str or "BLQ" in val_str:
+                        tiene_algun_bloque = True
+                        
+                if coincide_bloque or not tiene_algun_bloque:
+                    if pd.notna(fecha):
+                        fecha_str_corta = fecha.strftime('%d/%m')
+                        fecha_str_larga = fecha.strftime('%d/%m/%Y')
+                        
+                        texto_largo = f"🎯 **[{fecha_str_larga}]** {res['texto_base']}"
+                        texto_corto = f"🎯 **[{fecha_str_corta}]** {res['texto_base']}"
+                        
+                        if texto_largo not in reservas_radar_todas:
+                            reservas_radar_todas.append(texto_largo)
+                            if fecha <= limite_2_sem_ts:
+                                reservas_radar_cercanas.append(texto_corto)
+                    else:
+                        texto_generico = f"🎯 **[Frecuente/Día Completo]** {res['texto_base']}"
+                        if texto_generico not in reservas_radar_todas:
+                            reservas_radar_todas.append(texto_generico)
+                            reservas_radar_cercanas.append(texto_generico)
+        # =========================================================================
+
+        if avisos_agrupados["hoy"]:
+            st.warning("**📍 HOY:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["hoy"]]))
+        else:
+            st.success("**📍 HOY:** No hay reservas especiales generales.")
+
+        if avisos_agrupados["manana"]:
+            st.info("**⏭️ MAÑANA:**\n\n" + "\n\n".join([f"**•** {a}" for a in avisos_agrupados["manana"]]))
+
+        if reservas_radar_cercanas:
+            st.error(f"🚨 **ATENCIÓN: Hay reservas próximas para los {dia_elegido} en este bloque:**\n\n" + "\n\n".join([f"**•** {a}" for a in reservas_radar_cercanas]))
+            
+        if reservas_radar_todas:
+            with st.expander(f"🔮 Ver TODAS las reservas para {dia_elegido} - Bloque {bloque_elegido} ({len(reservas_radar_todas)} en total)", expanded=False):
+                st.write("\n\n".join([f"**•** {a}" for a in reservas_radar_todas]))
+
+        with st.expander("📅 Ver TODAS las reservas generales de las próximas 2 semanas", expanded=False):
+            if avisos_agrupados["proximas"]:
+                st.write("\n\n".join([f"**•** {a}" for a in avisos_agrupados["proximas"]]))
+            else:
+                st.write("No hay otras reservas a corto plazo.")
+
+        if avisos_agrupados["futuras"]:
+            with st.expander("📂 Ver reservas a largo plazo generales (después de 2 semanas)", expanded=False):
+                st.write("\n\n".join([f"**•** {a}" for a in avisos_agrupados["futuras"]]))
+
+        st.divider()
+
+        with st.expander("🔴 Ver Clases Regulares", expanded=False):
+            if not ocu.empty:
+                if 'BLOQUE' in ocu.columns:
+                    ocu['BLOQUE'] = ocu['BLOQUE'].astype(str).replace(traductor_bloques)
+                    
+                cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
+                st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
+
+        # =========================================================================
+        # 🚀 FORMULARIO DE RESERVAS (NUEVO) 🚀
+        # =========================================================================
+        st.divider()
+        st.subheader("📝 Registrar Nueva Reserva")
+        
+        # Lista exacta extraída de tu imagen
+        lista_espacios = [
+            "7º 13", "7º 14", "7º 15", "1º 31", "1º 32", "1º 33", "1º 34",
+            "2º 11", "2º 12", "2º 16", "2º PB1", "3º 23", "3º 24", "3º 25",
+            "3º 26", "4º 21", "4º 22", "4º 41", "4º 46", "5º 42", "5º 43",
+            "5º 44", "5º 45", "PB2", "Maker", "Jardín 61", "Jardín 63",
+            "Jardín Guitarra", "Jardín Teatro", "Laboratorio", "Biblioteca",
+            "Tecnología", "Atelier", "Oficina Virasoro 3P", "Cancha PB",
+            "Gimnasio Secundaria"
+        ]
+        
+        index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
+
+        with st.form("formulario_reserva", clear_on_submit=True):
+            st.caption("Al guardar, la reserva se escribirá automáticamente en la hoja 'Espacios Libres' del Excel.")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fecha_input = st.date_input("Fecha")
+                
+                # Cálculo automático del día
+                opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+                dia_calculado = opciones_dias[fecha_input.weekday()]
+                st.info(f"📅 Día automático: **{dia_calculado}**")
+                
+                bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
+                
+            with col2:
+                espacio_input = st.selectbox("Espacio", lista_espacios)
+                motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
+                
+            boton_guardar = st.form_submit_button("Guardar Reserva")
+
+        if boton_guardar:
+            if motivo_input:
+                try:
+                    documento = cliente.open("2026 ámbitos automatizado 2026")
+                    hoja = documento.worksheet("Espacios Libres")
+                    
+                    # Buscamos dónde escribir (primera fila vacía en la columna F)
+                    columna_f = hoja.col_values(6) 
+                    siguiente_fila = len(columna_f) + 1
+                    
+                    # Escribimos de la columna F a la J (5 columnas en total)
+                    rango = f"F{siguiente_fila}:J{siguiente_fila}"
+                    valores = [[
+                        fecha_input.strftime("%d/%m/%Y"), 
+                        dia_calculado, 
+                        bloque_input, 
+                        espacio_input, 
+                        motivo_input
+                    ]]
+                    
+                    hoja.update(range_name=rango, values=valores)
+                    
+                    st.success(f"✅ ¡Reserva guardada con éxito para el {dia_calculado} {fecha_input.strftime('%d/%m/%Y')} en {espacio_input}!")
+                    st.balloons()
+                    
+                except Exception as e:
+                    st.error(f"Hubo un error al intentar guardar. Verificá los permisos del robot. Detalles: {e}")
+            else:
+                st.warning("⚠️ Por favor, completá el Motivo antes de guardar.")
+
+    # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
+    with tab2:
+        tipo = st.radio("Buscar por:", ["Docente", "Curso"], horizontal=True)
+        col_filtro = 'DOCENTES' if tipo == "Docente" else 'CURSOS'
+        lista = sorted([x for x in df_ocupados[col_filtro].dropna().unique() if str(x).upper() != "NAN"])
+        sel = st.selectbox(f"Selecciona {tipo}:", lista)
+        st.divider()
+        st.header(f"Agenda de: {sel}")
+        
+        res = df_ocupados[df_ocupados[col_filtro] == sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+        
+        if 'BLOQUE' in res.columns:
+            res['BLOQUE'] = res['BLOQUE'].astype(str).replace(traductor_bloques)
+            
+        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res.columns]
+        st.dataframe(res[cols], hide_index=True, use_container_width=True)
+
+    # --- PESTAÑA 3: BUSCAR POR ÁMBITO ---
+    with tab3:
+        espacio_sel = st.selectbox("📍 Selecciona el Ámbito:", todos_los_espacios)
+        st.divider()
+        st.header(f"Agenda de: {espacio_sel}")
+        
+        res_e = df_ocupados[df_ocupados['ESPACIOS'] == espacio_sel].sort_values(['ORDEN_DIA', 'ORDEN_BLOQUE']).copy()
+        
+        if 'BLOQUE' in res_e.columns:
+            res_e['BLOQUE'] = res_e['BLOQUE'].astype(str).replace(traductor_bloques)
+            
+        cols = [c for c in ['DIA', 'BLOQUE', 'SUBBLOQUE', 'MATERIA', 'CURSOS', 'DOCENTES'] if c in res_e.columns]
+        st.dataframe(res_e[cols], hide_index=True, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Error técnico: {e}")
+
+# --- PIE DE PÁGINA PERSONALIZADO ---
+st.markdown("""
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        font-size: 12px;
+        color: grey;
+        padding: 10px;
+        background-color: transparent;
+        z-index: 100;
+    }
+    </style>
+    <div class="footer">
+        by Richard
+    </div>
+""", unsafe_allow_html=True)
