@@ -418,7 +418,7 @@ try:
                 cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
-        # =========================================================================
+       # =========================================================================
         # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN, USUARIO Y DINÁMICO) 🚀
         # =========================================================================
         st.divider()
@@ -430,17 +430,20 @@ try:
         opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         dia_calculado = opciones_dias[fecha_input.weekday()]
 
+        # --- CREDENCIALES (Afuera del formulario para que no se borren) ---
+        st.caption("🔒 **Acceso restringido:** Ingresá tu nombre y clave una sola vez por sesión.")
+        col_cred1, col_cred2 = st.columns(2)
+        usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
+        clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
+
+        # --- FORMULARIO (Acá adentro solo lo que queremos que se limpie) ---
         with st.form("formulario_reserva", clear_on_submit=True):
-            st.caption("🔒 **Acceso restringido:** Se requiere clave de autorización para registrar espacios.")
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns(2)
             with col1:
                 bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
                 espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos)
             with col2:
                 motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
-                usuario_input = st.text_input("Tu Nombre", placeholder="Ej: Richard")
-            with col3:
-                clave_input = st.text_input("Clave de Autorización", type="password")
                 st.info(f"📅 Día: **{dia_calculado}**")
                 
             boton_guardar = st.form_submit_button("Guardar Reserva")
