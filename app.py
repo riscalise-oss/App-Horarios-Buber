@@ -472,13 +472,24 @@ try:
                         st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
                     else:
                         # --- AUDITORÍA (Columna L) ---
-                        ahora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        audit_info = f"Registrado por: {usuario_input} el {ahora}"
+                        from datetime import timedelta
+                        # Ajustamos la hora (-3 para Argentina). Si ves que falta 1 hora más, poné hours=4
+                        ahora = datetime.now() - timedelta(hours=3)
+                        ahora_str = ahora.strftime("%d/%m/%Y %H:%M:%S")
+                        audit_info = f"Registrado por: {usuario_input} el {ahora_str}"
                         
                         columna_f = hoja.col_values(6) 
                         siguiente_fila = len(columna_f) + 1
+                        
+                        # Definimos el rango de F a L (7 columnas)
                         rango = f"F{siguiente_fila}:L{siguiente_fila}"
+                        
+                        # Los valores: la sexta posición (índice 5) es "", que corresponde a la Columna K
                         valores = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input, "", audit_info]]
+                        
+                        # !!! ESTA ES LA LÍNEA CLAVE QUE FALTABA PARA QUE SE AGREGUE A LA HOJA !!!
+                        hoja.update(range_name=rango, values=valores, value_input_option='USER_ENTERED')
+
                         st.success(f"✅ ¡Reserva guardada con éxito por {usuario_input}!")
                         st.balloons()
                         st.cache_data.clear()
