@@ -418,47 +418,48 @@ try:
                 cols = [c for c in ['BLOQUE', 'SUBBLOQUE', 'ESPACIOS', 'CURSOS', 'DOCENTES', 'MATERIA'] if c in ocu.columns]
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
-       # =========================================================================
-        # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN, USUARIO Y DINÁMICO) 🚀
+      # =========================================================================
+        # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN Y DESHACER) 🚀
         # =========================================================================
         st.divider()
         st.subheader("📝 Registrar Nueva Reserva")
         
         index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
 
-        fecha_input = st.date_input("Fecha de la reserva")
+        # --- 1. FECHA Y DÍA (Juntos y alineados) ---
+        col_f1, col_f2 = st.columns([1, 2])
+        fecha_input = col_f1.date_input("Fecha de la reserva")
         opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         dia_calculado = opciones_dias[fecha_input.weekday()]
+        # Truco HTML para empujar el texto para abajo y que quede alineado con la cajita de fecha
+        col_f2.markdown(f"<div style='margin-top: 32px; font-size: 16px;'>📅 Día: <b>{dia_calculado}</b></div>", unsafe_allow_html=True)
 
-        # --- CREDENCIALES (Afuera del formulario para que no se borren) ---
+        # --- 2. CREDENCIALES (Afuera para que no se borren) ---
         st.caption("🔒 **Acceso restringido:** Ingresá tu nombre y clave una sola vez por sesión.")
         col_cred1, col_cred2 = st.columns(2)
         usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
         clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
 
-        # --- FORMULARIO (Acá adentro solo lo que queremos que se limpie) ---
+        # --- 3. FORMULARIO PRINCIPAL ---
         with st.form("formulario_reserva", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
                 bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
-                espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos)
             with col2:
-                motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
-                st.info(f"📅 Día: **{dia_calculado}**")
+                espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos)
                 
+            motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
             boton_guardar = st.form_submit_button("Guardar Reserva")
 
+        # --- 4. PROCESAR GUARDADO ---
         if boton_guardar:
-            # 1. Chequeamos primero que la clave sea correcta
             if clave_input != "Buber2026":
                 st.error("❌ Clave de autorización incorrecta. No tienes permiso para realizar reservas.")
-            # 2. Chequeamos que no haya dejado los campos vacíos
             elif motivo_input and usuario_input:
                 try:
                     documento = cliente.open("2026 ámbitos automatizado 2026")
                     hoja = documento.worksheet("Espacios Libres")
                     
-                    # --- COMPROBACIÓN DE CHOQUES ---
                     datos_hoja = hoja.get_all_values()
                     f_nueva = fecha_input.strftime("%d/%m/%Y")
                     b_nuevo = str(bloque_input)
@@ -474,7 +475,6 @@ try:
                     if ya_existe:
                         st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
                     else:
-                        # --- AUDITORÍA (Columna L) ---
                         from datetime import timedelta
                         ahora = datetime.now() - timedelta(hours=3)
                         ahora_str = ahora.strftime("%d/%m/%Y %H:%M:%S")
@@ -483,23 +483,54 @@ try:
                         columna_f = hoja.col_values(6) 
                         siguiente_fila = len(columna_f) + 1
 
-                        # 1. GUARDAMOS DE F A J (Saltamos la K donde está el profesor)
+                        # Guardamos los datos
                         rango_datos = f"F{siguiente_fila}:J{siguiente_fila}"
                         valores_datos = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input]]
                         hoja.update(range_name=rango_datos, values=valores_datos, value_input_option='USER_ENTERED')
 
-                        # 2. GUARDAMOS LA AUDITORÍA SOLO EN LA L
+                        # Guardamos la auditoría
                         rango_audit = f"L{siguiente_fila}"
                         valores_audit = [[audit_info]]
                         hoja.update(range_name=rango_audit, values=valores_audit, value_input_option='USER_ENTERED')
 
-                        st.success(f"✅ ¡Reserva guardada con éxito por {usuario_input}!")
+                        # Creamos el resumen y lo guardamos en la memoria para el botón de deshacer
+                        resumen = f"**{dia_calculado} {f_nueva}** | Bloque **{bloque_input}** | **{espacio_input}** ({motivo_input})"
+                        st.session_state['ultima_fila'] = siguiente_fila
+                        st.session_state['ultimo_resumen'] = resumen
+                        
+                        # Mensaje de éxito detallado
+                        st.success(f"✅ ¡Reserva guardada con éxito! Se registró:\n\n👉 {resumen}")
                         st.balloons()
                         st.cache_data.clear()
                 except Exception as e:
                     st.error(f"Error al guardar: {e}")
             else:
                 st.warning("⚠️ Completá tu Nombre y el Motivo antes de guardar.")
+
+        # --- 5. SISTEMA "DESHACER" (Aparece solo si se hizo una reserva) ---
+        if 'ultima_fila' in st.session_state:
+            st.divider()
+            st.info(f"🔄 **Última reserva realizada por vos:** {st.session_state['ultimo_resumen']}")
+            
+            # Botón rojo para llamar la atención
+            if st.button("⚠️ Me equivoqué, cancelar esta reserva", type="primary"):
+                try:
+                    doc_borrar = cliente.open("2026 ámbitos automatizado 2026")
+                    hoja_borrar = doc_borrar.worksheet("Espacios Libres")
+                    fila = st.session_state['ultima_fila']
+                    
+                    # Borramos mandando espacios vacíos a F-J y a la L (salteando la K de fórmulas)
+                    hoja_borrar.update(range_name=f"F{fila}:J{fila}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
+                    hoja_borrar.update(range_name=f"L{fila}", values=[[""]], value_input_option='USER_ENTERED')
+                    
+                    st.success("🗑️ ¡La reserva fue anulada! El espacio vuelve a figurar libre.")
+                    
+                    # Limpiamos la memoria para que el botón desaparezca
+                    del st.session_state['ultima_fila']
+                    del st.session_state['ultimo_resumen']
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error(f"Error al cancelar la reserva: {e}")
 
     # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
     with tab2:
