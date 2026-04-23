@@ -13,6 +13,18 @@ from google.oauth2.service_account import Credentials
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Buscador de Ámbitos", page_icon="logo.png", layout="wide")
 
+# =========================================================================
+# 🎨 OCULTAR MENÚ DE STREAMLIT Y GITHUB
+# =========================================================================
+ocultar_menu_estilo = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+"""
+st.markdown(ocultar_menu_estilo, unsafe_allow_html=True)
+
 # ==============================================================================
 # --- CONEXIÓN A GOOGLE SHEETS ---
 # ==============================================================================
