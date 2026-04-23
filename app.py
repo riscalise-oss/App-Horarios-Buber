@@ -471,16 +471,14 @@ try:
                     if ya_existe:
                         st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
                     else:
-                        # --- AUDITORÍA (Columna K) ---
+                        # --- AUDITORÍA (Columna L) ---
                         ahora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         audit_info = f"Registrado por: {usuario_input} el {ahora}"
                         
                         columna_f = hoja.col_values(6) 
                         siguiente_fila = len(columna_f) + 1
-                        rango = f"F{siguiente_fila}:K{siguiente_fila}"
-                        valores = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input, audit_info]]
-                        
-                        hoja.update(range_name=rango, values=valores, value_input_option='USER_ENTERED')
+                        rango = f"F{siguiente_fila}:L{siguiente_fila}"
+                        valores = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input, "", audit_info]]
                         st.success(f"✅ ¡Reserva guardada con éxito por {usuario_input}!")
                         st.balloons()
                         st.cache_data.clear()
