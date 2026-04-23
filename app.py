@@ -4,6 +4,7 @@ import base64
 import os
 import unicodedata
 import re
+from datetime import datetime
 
 # --- NUEVAS LIBRERÍAS PARA GOOGLE SHEETS ---
 import gspread
@@ -113,6 +114,15 @@ def cargar_datos():
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
     
+    # --- NUEVO: CARGAR ÁMBITOS DINÁMICOS DESDE COLUMNA G ---
+    try:
+        doc = cliente.open("2026 ámbitos automatizado 2026")
+        hoja_conf = doc.worksheet("Configuración")
+        lista_ambitos_dinamicos = [a for a in hoja_conf.col_values(7) if a and a.upper() not in ["ESPACIOS", "AMBITOS", "ÁMBITOS"]]
+        lista_ambitos_dinamicos = sorted(lista_ambitos_dinamicos)
+    except Exception:
+        lista_ambitos_dinamicos = [] # Fallback si falla
+    
     # 🚀 MOTOR DE FECHAS Y FILTRADO 🚀
     col_fecha = None
     for col in df_config.columns:
@@ -219,10 +229,14 @@ def cargar_datos():
     else:
         espacios = []
         
-    return df_o, avisos, espacios, lista_todas_reservas
+    # Si la lectura dinámica falló por algo, usamos los espacios del csv
+    if not lista_ambitos_dinamicos:
+        lista_ambitos_dinamicos = espacios
+
+    return df_o, avisos, espacios, lista_todas_reservas, lista_ambitos_dinamicos
 
 try:
-    df_ocupados, avisos_agrupados, todos_los_espacios, lista_todas_reservas = cargar_datos()
+    df_ocupados, avisos_agrupados, todos_los_espacios, lista_todas_reservas, lista_ambitos_dinamicos = cargar_datos()
 
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
@@ -405,40 +419,38 @@ try:
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
         # =========================================================================
-        # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN DE DUPLICADOS) 🚀
+        # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN, USUARIO Y DINÁMICO) 🚀
         # =========================================================================
         st.divider()
         st.subheader("📝 Registrar Nueva Reserva")
-        
-        lista_espacios_form = [
-            "7º 13", "7º 14", "7º 15", "1º 31", "1º 32", "1º 33", "1º 34",
-            "2º 11", "2º 12", "2º 16", "2º PB1", "3º 23", "3º 24", "3º 25",
-            "3º 26", "4º 21", "4º 22", "4º 41", "4º 46", "5º 42", "5º 43",
-            "5º 44", "5º 45", "PB2", "Maker", "Jardín 61", "Jardín 63",
-            "Jardín Guitarra", "Jardín Teatro", "Laboratorio", "Biblioteca",
-            "Tecnología", "Atelier", "Oficina Virasoro 3P", "Cancha PB",
-            "Gimnasio Secundaria"
-        ]
         
         index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
 
         fecha_input = st.date_input("Fecha de la reserva")
         opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
         dia_calculado = opciones_dias[fecha_input.weekday()]
-        st.info(f"📅 Día seleccionado: **{dia_calculado}**")
 
         with st.form("formulario_reserva", clear_on_submit=True):
-            st.caption("Al guardar, la reserva se escribirá automáticamente en la hoja 'Espacios Libres' del Excel.")
-            col1, col2 = st.columns(2)
+            st.caption("🔒 **Acceso restringido:** Se requiere clave de autorización para registrar espacios.")
+            col1, col2, col3 = st.columns(3)
             with col1:
                 bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
-                espacio_input = st.selectbox("Espacio", lista_espacios_form)
+                espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos)
             with col2:
                 motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
+                usuario_input = st.text_input("Tu Nombre", placeholder="Ej: Richard")
+            with col3:
+                clave_input = st.text_input("Clave de Autorización", type="password")
+                st.info(f"📅 Día: **{dia_calculado}**")
+                
             boton_guardar = st.form_submit_button("Guardar Reserva")
 
         if boton_guardar:
-            if motivo_input:
+            # 1. Chequeamos primero que la clave sea correcta
+            if clave_input != "Buber2026":
+                st.error("❌ Clave de autorización incorrecta. No tienes permiso para realizar reservas.")
+            # 2. Chequeamos que no haya dejado los campos vacíos
+            elif motivo_input and usuario_input:
                 try:
                     documento = cliente.open("2026 ámbitos automatizado 2026")
                     hoja = documento.worksheet("Espacios Libres")
@@ -459,18 +471,23 @@ try:
                     if ya_existe:
                         st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
                     else:
+                        # --- AUDITORÍA (Columna K) ---
+                        ahora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                        audit_info = f"Registrado por: {usuario_input} el {ahora}"
+                        
                         columna_f = hoja.col_values(6) 
                         siguiente_fila = len(columna_f) + 1
-                        rango = f"F{siguiente_fila}:J{siguiente_fila}"
-                        valores = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input]]
+                        rango = f"F{siguiente_fila}:K{siguiente_fila}"
+                        valores = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input, audit_info]]
+                        
                         hoja.update(range_name=rango, values=valores, value_input_option='USER_ENTERED')
-                        st.success(f"✅ Reserva guardada con éxito!")
+                        st.success(f"✅ ¡Reserva guardada con éxito por {usuario_input}!")
                         st.balloons()
                         st.cache_data.clear()
                 except Exception as e:
                     st.error(f"Error al guardar: {e}")
             else:
-                st.warning("⚠️ Completá el motivo.")
+                st.warning("⚠️ Completá tu Nombre y el Motivo antes de guardar.")
 
     # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
     with tab2:
