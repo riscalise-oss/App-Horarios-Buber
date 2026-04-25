@@ -313,24 +313,72 @@ try:
         libres_medio_2 = sorted(libres_medio_2)
         libres_otros = sorted(libres_otros)
 
+        # =========================================================================
+        # 🚀 AVISO INTELIGENTE "SOLO POR HOY" (ETIQUETA VISUAL) 🚀
+        # =========================================================================
+        hoy_ts = pd.Timestamp('today').normalize()
+        mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES', 'Saturday': 'SABADO', 'Sunday': 'DOMINGO'}
+        dia_hoy_str = mapa_dias.get(hoy_ts.day_name(), "")
+        dia_elegido_clean = quitar_tildes(dia_elegido)
+        
+        espacios_reservados_hoy = set()
+        
+        # Si el día seleccionado coincide con el día actual de la semana
+        if dia_elegido_clean == dia_hoy_str:
+            for res in lista_todas_reservas:
+                fecha = res['fecha']
+                if pd.notna(fecha) and fecha == hoy_ts:
+                    row_data = res['row']
+                    
+                    coincide_bloque = False
+                    tiene_algun_bloque = False
+                    for val in row_data.values:
+                        val_str = str(val).strip().upper()
+                        numeros_en_celda = re.findall(r'\d+', val_str)
+                        if str(bloque_elegido) in numeros_en_celda or f"BLOQUE {bloque_elegido}" in val_str or f"B{bloque_elegido}" in val_str:
+                            coincide_bloque = True
+                        if set(numeros_en_celda).intersection({"1", "2", "3", "4", "5", "6"}) or "BLOQUE" in val_str or "BLQ" in val_str:
+                            tiene_algun_bloque = True
+                            
+                    # Si coincide el bloque, identificamos qué espacio es
+                    if coincide_bloque or not tiene_algun_bloque:
+                        for e in todos_los_espacios:
+                            if any(e == str(x).strip().upper() for x in row_data.values):
+                                espacios_reservados_hoy.add(e)
+
+        # Función para inyectar la advertencia visual
+        def formatear_espacio(e):
+            if e in espacios_reservados_hoy:
+                return f"**{e}** (🔴 HOY OCUPADO)"
+            return e
+
+        # Aplicamos el formato a las listas
+        libres_completos_fmt = [formatear_espacio(e) for e in libres_completos]
+        libres_medio_1_fmt = [formatear_espacio(e) for e in libres_medio_1]
+        libres_medio_2_fmt = [formatear_espacio(e) for e in libres_medio_2]
+        libres_otros_fmt = [formatear_espacio(e) for e in libres_otros]
+
         st.subheader("🟢 Ámbitos Libres")
         
         hay_libres = False
         if libres_completos:
-            st.success("**Bloque Completo:**\n\n ✅ " + " | ✅ ".join(libres_completos))
+            st.success("**Bloque Completo:**\n\n ✅ " + " | ✅ ".join(libres_completos_fmt))
             hay_libres = True
         if libres_medio_1:
-            st.info("⏳ **1er Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_1))
+            st.info("⏳ **1er Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_1_fmt))
             hay_libres = True
         if libres_medio_2:
-            st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_2))
+            st.info("⏳ **2do Medio Bloque:**\n\n ✔️ " + " | ✔️ ".join(libres_medio_2_fmt))
             hay_libres = True
         if libres_otros:
-            st.info("⏳ **Otros libres parciales:**\n\n ✔️ " + " | ✔️ ".join(libres_otros))
+            st.info("⏳ **Otros libres parciales:**\n\n ✔️ " + " | ✔️ ".join(libres_otros_fmt))
             hay_libres = True
 
         if not hay_libres:
             st.error("No hay espacios libres en este bloque.")
+            
+        if espacios_reservados_hoy:
+            st.caption("💡 *Nota: Los espacios marcados con '(🔴 HOY OCUPADO)' suelen estar libres este día, pero tienen una reserva especial para la fecha de hoy. Podés usarlos para fechas futuras.*")
 
         st.divider()
         st.subheader("📌 Reservas Especiales")
