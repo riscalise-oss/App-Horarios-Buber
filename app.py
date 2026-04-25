@@ -550,44 +550,52 @@ try:
             else:
                 st.warning("⚠️ Completá tu Nombre y el Motivo antes de guardar.")
 
-        # --- 5. SISTEMA "DESHACER" Y "REUBICAR" (Aparece solo si se hizo una reserva) ---
+        # =========================================================================
+        # 🚀 SISTEMA "DESHACER" Y "REUBICAR" (ACTUALIZADO PARA BORRADO DOBLE)
+        # =========================================================================
         if 'ultima_fila' in st.session_state:
             st.divider()
             st.info(f"🔄 **Última reserva realizada por vos:** {st.session_state['ultimo_resumen']}")
             
-            # Botón rojo para llamar la atención original
             if st.button("⚠️ Me equivoqué, cancelar esta reserva", type="primary"):
                 try:
                     doc_borrar = cliente.open("2026 ámbitos automatizado 2026")
                     hoja_borrar = doc_borrar.worksheet("Espacios Libres")
-                    fila = st.session_state['ultima_fila']
                     
-                    # Borramos mandando espacios vacíos a F-J y a la L (salteando la K de fórmulas)
-                    hoja_borrar.update(range_name=f"F{fila}:J{fila}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
-                    hoja_borrar.update(range_name=f"L{fila}", values=[[""]], value_input_option='USER_ENTERED')
+                    # 1. Borrar la reserva original
+                    fila_orig = st.session_state['ultima_fila']
+                    hoja_borrar.update(range_name=f"F{fila_orig}:J{fila_orig}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
+                    hoja_borrar.update(range_name=f"L{fila_orig}", values=[[""]], value_input_option='USER_ENTERED')
                     
-                    st.success("🗑️ ¡La reserva fue anulada! El espacio vuelve a figurar libre.")
+                    # 2. Borrar la reubicación (si es que se hizo una)
+                    if 'fila_reubicacion' in st.session_state:
+                        fila_reub = st.session_state['fila_reubicacion']
+                        hoja_borrar.update(range_name=f"F{fila_reub}:J{fila_reub}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
+                        hoja_borrar.update(range_name=f"L{fila_reub}", values=[[""]], value_input_option='USER_ENTERED')
+                        mensaje_extra = " y la reubicación del profesor"
+                    else:
+                        mensaje_extra = ""
                     
-                    # Limpiamos variables
-                    del st.session_state['ultima_fila']
-                    del st.session_state['ultimo_resumen']
-                    if 'prof_desplazado' in st.session_state: del st.session_state['prof_desplazado']
-                    if 'reubicacion_resuelta' in st.session_state: del st.session_state['reubicacion_resuelta']
-                    if 'reserva_datos' in st.session_state: del st.session_state['reserva_datos']
+                    st.success(f"🗑️ ¡La reserva{mensaje_extra} fue anulada! El sistema quedó limpio.")
+                    
+                    # Limpiar memoria de la sesión
+                    for clave in ['ultima_fila', 'ultimo_resumen', 'prof_desplazado', 'reubicacion_resuelta', 'reserva_datos', 'fila_reubicacion']:
+                        if clave in st.session_state:
+                            del st.session_state[clave]
                     
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al cancelar la reserva: {e}")
 
-            # --- NUEVA SECCIÓN: REUBICACIÓN INTERACTIVA ---
+            # --- SECCIÓN: REUBICACIÓN INTERACTIVA ---
             if st.session_state.get('prof_desplazado') and not st.session_state.get('reubicacion_resuelta', False):
                 st.divider()
                 st.subheader(f"📍 Reubicar a {st.session_state['prof_desplazado']}")
                 
                 if libres_completos:
                     opciones_libres = ["Seleccionar un espacio..."] + libres_completos
-                    espacio_reubicar = st.selectbox("Elegí un nuevo ámbito que esté libre en este bloque:", opciones_libres)
+                    espacio_reubicar = st.selectbox("Elegí un nuevo ámbito para el profesor:", opciones_libres)
                     
                     col_r1, col_r2 = st.columns(2)
                     
@@ -603,32 +611,32 @@ try:
                                     audit_r = f"Reubicado por: {usuario_input} el {ahora_r.strftime('%d/%m/%Y %H:%M:%S')}"
                                     motivo_r = f"Reubicación de {st.session_state['prof_desplazado']}"
                                     
+                                    # Calculamos la fila de la reubicación
                                     siguiente_fila_r = len(hoja_r.col_values(6)) + 1
                                     
-                                    # F:J
+                                    # Guardamos en el Sheet
                                     hoja_r.update(range_name=f"F{siguiente_fila_r}:J{siguiente_fila_r}", 
                                                   values=[[datos_r['fecha'], datos_r['dia'], datos_r['bloque'], espacio_reubicar, motivo_r]], 
                                                   value_input_option='USER_ENTERED')
-                                    # L
                                     hoja_r.update(range_name=f"L{siguiente_fila_r}", 
                                                   values=[[audit_r]], 
                                                   value_input_option='USER_ENTERED')
                                     
+                                    # GUARDAMOS EL ÍNDICE PARA PODER BORRARLO LUEGO SI ES NECESARIO
+                                    st.session_state['fila_reubicacion'] = siguiente_fila_r
                                     st.session_state['reubicacion_resuelta'] = True
+                                    
                                     st.success(f"¡Listo! Se asignó a {st.session_state['prof_desplazado']} en **{espacio_reubicar}**.")
                                     st.cache_data.clear()
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Error al guardar reubicación: {e}")
                             else:
-                                st.warning("⚠️ Por favor, seleccioná un espacio válido de la lista.")
-                else:
-                    st.error("No hay espacios libres completos en este bloque para ofrecer como reubicación.")
+                                st.warning("⚠️ Seleccioná un espacio de la lista.")
                 
                 with col_r2 if libres_completos else st.container():
-                    if st.button("🗣️ Hablaré con el profesor (No reubicar en sistema)", use_container_width=True):
+                    if st.button("🗣️ Hablaré con el profesor", use_container_width=True):
                         st.session_state['reubicacion_resuelta'] = True
-                        st.info("Perfecto, este caso se gestionará de manera manual.")
                         st.rerun()
 
     # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
