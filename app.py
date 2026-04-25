@@ -316,7 +316,7 @@ try:
         # =========================================================================
         # 🚀 AVISO INTELIGENTE "SOLO POR HOY" (ETIQUETA VISUAL) 🚀
         # =========================================================================
-        hoy_ts = pd.Timestamp('today').normalize()
+        hoy_ts = pd.Timestamp('2026-04-27').normalize()
         mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES', 'Saturday': 'SABADO', 'Sunday': 'DOMINGO'}
         dia_hoy_str = mapa_dias.get(hoy_ts.day_name(), "")
         dia_elegido_clean = quitar_tildes(dia_elegido)
