@@ -26,20 +26,23 @@ ocultar_menu_estilo = """
 st.markdown(ocultar_menu_estilo, unsafe_allow_html=True)
 
 # ==============================================================================
-# --- CONEXIÓN A GOOGLE SHEETS ---
+# --- CONEXIÓN A GOOGLE SHEETS (LAZY LOADING Y CACHÉ) ---
 # ==============================================================================
-try:
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    credenciales = Credentials.from_service_account_info(
-        st.secrets["google_service_account"],
-        scopes=scopes
-    )
-    cliente = gspread.authorize(credenciales)
-except Exception as e:
-    st.warning("⚠️ Todavía no se configuraron los secretos de Google. La función de reservar no estará disponible.")
+@st.cache_resource
+def conectar_google():
+    try:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        credenciales = Credentials.from_service_account_info(
+            st.secrets["google_service_account"],
+            scopes=scopes
+        )
+        return gspread.authorize(credenciales)
+    except Exception as e:
+        st.warning("⚠️ No se pudo conectar a Google. La función de reservar no estará disponible.")
+        return None
 
 # ==============================================================================
 # --- FUNCIÓN PARA QUITAR TILDES ---
@@ -49,32 +52,30 @@ def quitar_tildes(s):
                    if unicodedata.category(c) != 'Mn').upper().strip()
 
 # ==============================================================================
-# --- FUNCIÓN PARA EL FONDO INSTITUCIONAL ---
+# --- PROCESAMIENTO DE IMÁGENES OPTIMIZADO CON CACHÉ ---
 # ==============================================================================
+@st.cache_data
+def cargar_imagen_base64(ruta_archivo):
+    if os.path.exists(ruta_archivo):
+        with open(ruta_archivo, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return None
+
 def aplicar_fondo_institucional(archivo_imagen):
-    if os.path.exists(archivo_imagen):
-        try:
-            with open(archivo_imagen, "rb") as f:
-                data = f.read()
-            img_base64 = base64.b64encode(data).decode()
-            
-            page_bg_img = f'''
-            <style>
-            .stApp {{
-                background-image: url("data:image/png;base64,{img_base64}");
-                background-size: cover;
-                background-repeat: no-repeat;
-                background-position: center;
-                background-attachment: fixed;
-            }}
-            </style>
-            '''
-            st.markdown(page_bg_img, unsafe_allow_html=True)
-            
-        except Exception as e:
-            st.error(f"Error al cargar el fondo: {e}")
-    else:
-        pass 
+    img_base64 = cargar_imagen_base64(archivo_imagen)
+    if img_base64:
+        page_bg_img = f'''
+        <style>
+        .stApp {{
+            background-image: url("data:image/png;base64,{img_base64}");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        </style>
+        '''
+        st.markdown(page_bg_img, unsafe_allow_html=True)
 
 # --- CSS LIMPIO Y SEGURO ---
 ocultar_menu = """
@@ -98,26 +99,23 @@ traductor_bloques = {
     "6": "6. 15:10 a 16:30"
 }
 
-# --- TÍTULO CON LOGO ---
-try:
-    with open("logo.png", "rb") as f:
-        data = f.read()
-    img_base64 = base64.b64encode(data).decode()
-    
+# --- TÍTULO CON LOGO OPTIMIZADO ---
+img_logo_base64 = cargar_imagen_base64("logo.png")
+if img_logo_base64:
     st.markdown(f"""
         <div style="display: flex; align-items: center; margin-bottom: 20px; background-color: rgba(255, 255, 255, 0.7); padding: 10px; border-radius: 10px;">
-            <img src="data:image/png;base64,{img_base64}" width="70" style="margin-right: 15px; border-radius: 8px;">
+            <img src="data:image/png;base64,{img_logo_base64}" width="70" style="margin-right: 15px; border-radius: 8px;">
             <h1 style="margin: 0; padding: 0; color: #31333F;">Buscador de Ámbitos</h1>
         </div>
     """, unsafe_allow_html=True)
-except Exception:
+else:
     st.title("🛡️ Buscador de Ámbitos")
 
 # --- 1. TUS ENLACES ---
 LINK_OCUPADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=727803976&single=true&output=csv"
 LINK_RESERVAS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0A2kjdA80XSzjxLZBlutVdgmY5wl78w2GqjYA9HMhK8SJ-WbCS_ixqrYLubXRuG6-KbKm3K9C7yHW/pub?gid=447717872&single=true&output=csv"
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300) # Tiempo de vida ajustado a 5 minutos para optimizar
 def cargar_datos():
     df_o = pd.read_csv(LINK_OCUPADOS)
     df_o.columns = [quitar_tildes(c) for c in df_o.columns]
@@ -125,15 +123,6 @@ def cargar_datos():
     
     df_config = pd.read_csv(LINK_RESERVAS, header=None, on_bad_lines='skip', engine='python')
     df_config = df_config.loc[:, ~df_config.columns.duplicated()].copy()
-    
-    # --- NUEVO: CARGAR ÁMBITOS DINÁMICOS DESDE COLUMNA G ---
-    try:
-        doc = cliente.open("2026 ámbitos automatizado 2026")
-        hoja_conf = doc.worksheet("Configuración")
-        lista_ambitos_dinamicos = [a for a in hoja_conf.col_values(7) if a and a.upper() not in ["ESPACIOS", "AMBITOS", "ÁMBITOS"]]
-        lista_ambitos_dinamicos = sorted(lista_ambitos_dinamicos)
-    except Exception:
-        lista_ambitos_dinamicos = [] # Fallback si falla
     
     # 🚀 MOTOR DE FECHAS Y FILTRADO 🚀
     col_fecha = None
@@ -241,14 +230,10 @@ def cargar_datos():
     else:
         espacios = []
         
-    # Si la lectura dinámica falló por algo, usamos los espacios del csv
-    if not lista_ambitos_dinamicos:
-        lista_ambitos_dinamicos = espacios
-
-    return df_o, avisos, espacios, lista_todas_reservas, lista_ambitos_dinamicos
+    return df_o, avisos, espacios, lista_todas_reservas
 
 try:
-    df_ocupados, avisos_agrupados, todos_los_espacios, lista_todas_reservas, lista_ambitos_dinamicos = cargar_datos()
+    df_ocupados, avisos_agrupados, todos_los_espacios, lista_todas_reservas = cargar_datos()
 
     tab1, tab2, tab3 = st.tabs(["🕰️ Buscar por Horario", "👤 Buscar Docente/Curso", "📍 Buscar por Ámbito"])
 
@@ -323,7 +308,6 @@ try:
         
         espacios_reservados_hoy = set()
         
-        # Si el día seleccionado coincide con el día actual de la semana
         if dia_elegido_clean == dia_hoy_str:
             for res in lista_todas_reservas:
                 fecha = res['fecha']
@@ -340,19 +324,16 @@ try:
                         if set(numeros_en_celda).intersection({"1", "2", "3", "4", "5", "6"}) or "BLOQUE" in val_str or "BLQ" in val_str:
                             tiene_algun_bloque = True
                             
-                    # Si coincide el bloque, identificamos qué espacio es
                     if coincide_bloque or not tiene_algun_bloque:
                         for e in todos_los_espacios:
                             if any(e == str(x).strip().upper() for x in row_data.values):
                                 espacios_reservados_hoy.add(e)
 
-        # Función para inyectar la advertencia visual
         def formatear_espacio(e):
             if e in espacios_reservados_hoy:
                 return f"**{e}** (🔴 HOY OCUPADO)"
             return e
 
-        # Aplicamos el formato a las listas
         libres_completos_fmt = [formatear_espacio(e) for e in libres_completos]
         libres_medio_1_fmt = [formatear_espacio(e) for e in libres_medio_1]
         libres_medio_2_fmt = [formatear_espacio(e) for e in libres_medio_2]
@@ -479,213 +460,212 @@ try:
                 st.dataframe(ocu[cols], hide_index=True, use_container_width=True)
 
         # =========================================================================
-        # 🚀 FORMULARIO DE RESERVAS (CON PROTECCIÓN Y DESHACER) 🚀
+        # 🚀 FORMULARIO DE RESERVAS (LAZY LOADING) 🚀
         # =========================================================================
         st.divider()
-        st.subheader("📝 Registrar Nueva Reserva")
-        
-        index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
-
-        # --- 1. FECHA Y DÍA (Juntos y alineados) ---
-        col_f1, col_f2 = st.columns([1, 2])
-        fecha_input = col_f1.date_input("Fecha de la reserva")
-        opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-        dia_calculado = opciones_dias[fecha_input.weekday()]
-        # Truco HTML para empujar el texto para abajo y que quede alineado con la cajita de fecha
-        col_f2.markdown(f"<div style='margin-top: 32px; font-size: 16px;'>📅 Día: <b>{dia_calculado}</b></div>", unsafe_allow_html=True)
-
-        # --- 2. CREDENCIALES (Afuera para que no se borren) ---
-        st.caption("🔒 **Acceso restringido:** Ingresá tu nombre y clave una sola vez por sesión.")
-        col_cred1, col_cred2 = st.columns(2)
-        usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
-        clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
-
-        # --- 3. FORMULARIO PRINCIPAL ---
-        with st.form("formulario_reserva", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
-            with col2:
-                espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos)
+        if st.toggle("📝 HACER UNA RESERVA ESPECIAL"):
+            st.subheader("Registrar Nueva Reserva")
+            
+            with st.spinner("Estableciendo conexión segura con la base de datos..."):
+                cliente = conectar_google()
                 
-            motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
-            boton_guardar = st.form_submit_button("Guardar Reserva")
-
-        # --- 4. PROCESAR GUARDADO E INTELIGENCIA DE ASIGNACIONES ---
-        if boton_guardar:
-            if clave_input != "Buber2026":
-                st.error("❌ Clave de autorización incorrecta. No tienes permiso para realizar reservas.")
-            elif motivo_input and usuario_input:
+            if cliente:
                 try:
-                    documento = cliente.open("2026 ámbitos automatizado 2026")
-                    hoja_libres = documento.worksheet("Espacios Libres")
-                    hoja_asignaciones = documento.worksheet("Asignaciones") # Abrimos la hoja del radar
-                    
-                    # 1. Validar si el espacio ya estaba reservado (choque con otra reserva manual)
-                    datos_hoja = hoja_libres.get_all_values()
-                    f_nueva = fecha_input.strftime("%d/%m/%Y")
-                    b_nuevo = str(bloque_input)
-                    e_nuevo = str(espacio_input).strip().upper()
-                    
-                    ya_existe = False
-                    for fila in datos_hoja:
-                        if len(fila) >= 9:
-                            if fila[5] == f_nueva and str(fila[7]) == b_nuevo and str(fila[8]).strip().upper() == e_nuevo:
-                                ya_existe = True
-                                break
-                    
-                    if ya_existe:
-                        st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
-                    else:
-                        # 2. Buscar si desplaza a alguien en "Asignaciones"
-                        datos_asig = hoja_asignaciones.get_all_values()
-                        profesor_desplazado = None
-                        materia_desplazada = None
-                        
-                        for fila_asig in datos_asig[1:]: # Saltamos la fila 1 (títulos)
-                            if len(fila_asig) >= 6:
-                                # Limpiamos espacios y mayúsculas para comparar igual que la fórmula del Excel
-                                dia_a = str(fila_asig[0]).strip().upper()
-                                blq_a = str(fila_asig[1]).strip().upper()
-                                esp_a = str(fila_asig[3]).strip().upper()
-                                
-                                if dia_a == dia_calculado.strip().upper() and blq_a == b_nuevo and esp_a == e_nuevo:
-                                    materia_desplazada = str(fila_asig[4]).strip()
-                                    profesor_desplazado = str(fila_asig[5]).strip()
-                                    break # Lo encontramos, cortamos la búsqueda
-                        
-                        # 3. Guardar la reserva
-                        ahora = datetime.now() - timedelta(hours=3)
-                        ahora_str = ahora.strftime("%d/%m/%Y %H:%M:%S")
-                        audit_info = f"Registrado por: {usuario_input} el {ahora_str}"
-                        
-                        columna_f = hoja_libres.col_values(6) 
-                        siguiente_fila = len(columna_f) + 1
+                    doc_conf = cliente.open("2026 ámbitos automatizado 2026")
+                    hoja_conf = doc_conf.worksheet("Configuración")
+                    lista_ambitos_dinamicos_form = [a for a in hoja_conf.col_values(7) if a and a.upper() not in ["ESPACIOS", "AMBITOS", "ÁMBITOS"]]
+                    lista_ambitos_dinamicos_form = sorted(lista_ambitos_dinamicos_form)
+                except Exception:
+                    lista_ambitos_dinamicos_form = todos_los_espacios # Fallback si falla
+                
+                index_bloque = int(bloque_elegido) - 1 if str(bloque_elegido).isdigit() and int(bloque_elegido) in range(1, 7) else 0
 
-                        # Guardamos los datos
-                        rango_datos = f"F{siguiente_fila}:J{siguiente_fila}"
-                        valores_datos = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input]]
-                        hoja_libres.update(range_name=rango_datos, values=valores_datos, value_input_option='USER_ENTERED')
+                col_f1, col_f2 = st.columns([1, 2])
+                fecha_input = col_f1.date_input("Fecha de la reserva")
+                opciones_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+                dia_calculado = opciones_dias[fecha_input.weekday()]
+                
+                col_f2.markdown(f"<div style='margin-top: 32px; font-size: 16px;'>📅 Día: <b>{dia_calculado}</b></div>", unsafe_allow_html=True)
 
-                        # Guardamos la auditoría
-                        rango_audit = f"L{siguiente_fila}"
-                        valores_audit = [[audit_info]]
-                        hoja_libres.update(range_name=rango_audit, values=valores_audit, value_input_option='USER_ENTERED')
+                st.caption("🔒 **Acceso restringido:** Ingresá tu nombre y clave una sola vez por sesión.")
+                col_cred1, col_cred2 = st.columns(2)
+                usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
+                clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
 
-                        # Creamos el resumen y lo guardamos en la memoria para el botón de deshacer y reubicar
-                        resumen = f"**{dia_calculado} {f_nueva}** | Bloque **{bloque_input}** | **{espacio_input}** ({motivo_input})"
-                        st.session_state['ultima_fila'] = siguiente_fila
-                        st.session_state['ultimo_resumen'] = resumen
-                        st.session_state['reubicacion_resuelta'] = False
-                        st.session_state['reserva_datos'] = {
-                            'fecha': f_nueva,
-                            'dia': dia_calculado,
-                            'bloque': int(bloque_input)
-                        }
+                with st.form("formulario_reserva", clear_on_submit=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
+                    with col2:
+                        espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos_form)
                         
-                        # Mostramos el mensaje correspondiente
-                        if profesor_desplazado:
-                            st.session_state['prof_desplazado'] = f"{profesor_desplazado} ({materia_desplazada})"
-                            st.warning(f"⚠️ **¡Reserva guardada!** Pero atención: desplazaste a **{profesor_desplazado}** ({materia_desplazada}).\n\n👉 {resumen}")
-                        else:
-                            st.session_state['prof_desplazado'] = None
-                            st.success(f"✅ ¡Reserva guardada con éxito! No se desplazó a ningún profesor.\n\n👉 {resumen}")
-                            st.balloons()
+                    motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
+                    boton_guardar = st.form_submit_button("Guardar Reserva")
+
+                if boton_guardar:
+                    if clave_input != "Buber2026":
+                        st.error("❌ Clave de autorización incorrecta. No tienes permiso para realizar reservas.")
+                    elif motivo_input and usuario_input:
+                        try:
+                            hoja_libres = doc_conf.worksheet("Espacios Libres")
+                            hoja_asignaciones = doc_conf.worksheet("Asignaciones") 
                             
-                        st.cache_data.clear()
-                except Exception as e:
-                    st.error(f"Error al guardar: {e}")
-            else:
-                st.warning("⚠️ Completá tu Nombre y el Motivo antes de guardar.")
+                            datos_hoja = hoja_libres.get_all_values()
+                            f_nueva = fecha_input.strftime("%d/%m/%Y")
+                            b_nuevo = str(bloque_input)
+                            e_nuevo = str(espacio_input).strip().upper()
+                            
+                            ya_existe = False
+                            for fila in datos_hoja:
+                                if len(fila) >= 9:
+                                    if fila[5] == f_nueva and str(fila[7]) == b_nuevo and str(fila[8]).strip().upper() == e_nuevo:
+                                        ya_existe = True
+                                        break
+                            
+                            if ya_existe:
+                                st.error(f"❌ El espacio {espacio_input} ya está reservado para esa fecha y bloque.")
+                            else:
+                                datos_asig = hoja_asignaciones.get_all_values()
+                                profesor_desplazado = None
+                                materia_desplazada = None
+                                
+                                for fila_asig in datos_asig[1:]: 
+                                    if len(fila_asig) >= 6:
+                                        dia_a = str(fila_asig[0]).strip().upper()
+                                        blq_a = str(fila_asig[1]).strip().upper()
+                                        esp_a = str(fila_asig[3]).strip().upper()
+                                        
+                                        if dia_a == dia_calculado.strip().upper() and blq_a == b_nuevo and esp_a == e_nuevo:
+                                            materia_desplazada = str(fila_asig[4]).strip()
+                                            profesor_desplazado = str(fila_asig[5]).strip()
+                                            break 
+                                
+                                ahora = datetime.now() - timedelta(hours=3)
+                                ahora_str = ahora.strftime("%d/%m/%Y %H:%M:%S")
+                                audit_info = f"Registrado por: {usuario_input} el {ahora_str}"
+                                
+                                columna_f = hoja_libres.col_values(6) 
+                                siguiente_fila = len(columna_f) + 1
+
+                                rango_datos = f"F{siguiente_fila}:J{siguiente_fila}"
+                                valores_datos = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input]]
+                                hoja_libres.update(range_name=rango_datos, values=valores_datos, value_input_option='USER_ENTERED')
+
+                                rango_audit = f"L{siguiente_fila}"
+                                valores_audit = [[audit_info]]
+                                hoja_libres.update(range_name=rango_audit, values=valores_audit, value_input_option='USER_ENTERED')
+
+                                resumen = f"**{dia_calculado} {f_nueva}** | Bloque **{bloque_input}** | **{espacio_input}** ({motivo_input})"
+                                st.session_state['ultima_fila'] = siguiente_fila
+                                st.session_state['ultimo_resumen'] = resumen
+                                st.session_state['reubicacion_resuelta'] = False
+                                st.session_state['reserva_datos'] = {
+                                    'fecha': f_nueva,
+                                    'dia': dia_calculado,
+                                    'bloque': int(bloque_input)
+                                }
+                                
+                                if profesor_desplazado:
+                                    st.session_state['prof_desplazado'] = f"{profesor_desplazado} ({materia_desplazada})"
+                                    st.warning(f"⚠️ **¡Reserva guardada!** Pero atención: desplazaste a **{profesor_desplazado}** ({materia_desplazada}).\n\n👉 {resumen}")
+                                else:
+                                    st.session_state['prof_desplazado'] = None
+                                    st.success(f"✅ ¡Reserva guardada con éxito! No se desplazó a ningún profesor.\n\n👉 {resumen}")
+                                    st.balloons()
+                                    
+                                st.cache_data.clear()
+                        except Exception as e:
+                            st.error(f"Error al guardar: {e}")
+                    else:
+                        st.warning("⚠️ Completá tu Nombre y el Motivo antes de guardar.")
 
         # =========================================================================
-        # 🚀 SISTEMA "DESHACER" Y "REUBICAR" (ACTUALIZADO PARA BORRADO DOBLE)
+        # 🚀 SISTEMA "DESHACER" Y "REUBICAR" FUERA DEL TOGGLE
         # =========================================================================
         if 'ultima_fila' in st.session_state:
             st.divider()
-            st.info(f"🔄 **Última reserva realizada por vos:** {st.session_state['ultimo_resumen']}")
             
-            if st.button("⚠️ Me equivoqué, cancelar esta reserva", type="primary"):
-                try:
-                    doc_borrar = cliente.open("2026 ámbitos automatizado 2026")
-                    hoja_borrar = doc_borrar.worksheet("Espacios Libres")
-                    
-                    # 1. Borrar la reserva original
-                    fila_orig = st.session_state['ultima_fila']
-                    hoja_borrar.update(range_name=f"F{fila_orig}:J{fila_orig}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
-                    hoja_borrar.update(range_name=f"L{fila_orig}", values=[[""]], value_input_option='USER_ENTERED')
-                    
-                    # 2. Borrar la reubicación (si es que se hizo una)
-                    if 'fila_reubicacion' in st.session_state:
-                        fila_reub = st.session_state['fila_reubicacion']
-                        hoja_borrar.update(range_name=f"F{fila_reub}:J{fila_reub}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
-                        hoja_borrar.update(range_name=f"L{fila_reub}", values=[[""]], value_input_option='USER_ENTERED')
-                        mensaje_extra = " y la reubicación del profesor"
-                    else:
-                        mensaje_extra = ""
-                    
-                    st.success(f"🗑️ ¡La reserva{mensaje_extra} fue anulada! El sistema quedó limpio.")
-                    
-                    # Limpiar memoria de la sesión
-                    for clave in ['ultima_fila', 'ultimo_resumen', 'prof_desplazado', 'reubicacion_resuelta', 'reserva_datos', 'fila_reubicacion']:
-                        if clave in st.session_state:
-                            del st.session_state[clave]
-                    
-                    st.cache_data.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al cancelar la reserva: {e}")
-
-            # --- SECCIÓN: REUBICACIÓN INTERACTIVA ---
-            if st.session_state.get('prof_desplazado') and not st.session_state.get('reubicacion_resuelta', False):
-                st.divider()
-                st.subheader(f"📍 Reubicar a {st.session_state['prof_desplazado']}")
+            # Reconectamos en silencio solo si hay algo pendiente
+            cliente = conectar_google() 
+            
+            if cliente:
+                st.info(f"🔄 **Última reserva realizada por vos:** {st.session_state['ultimo_resumen']}")
                 
-                if libres_completos:
-                    opciones_libres = ["Seleccionar un espacio..."] + libres_completos
-                    espacio_reubicar = st.selectbox("Elegí un nuevo ámbito para el profesor:", opciones_libres)
-                    
-                    col_r1, col_r2 = st.columns(2)
-                    
-                    with col_r1:
-                        if st.button("✅ Confirmar Reubicación", type="primary", use_container_width=True):
-                            if espacio_reubicar != "Seleccionar un espacio...":
-                                try:
-                                    doc_r = cliente.open("2026 ámbitos automatizado 2026")
-                                    hoja_r = doc_r.worksheet("Espacios Libres")
-                                    
-                                    datos_r = st.session_state['reserva_datos']
-                                    ahora_r = datetime.now() - timedelta(hours=3)
-                                    audit_r = f"Reubicado por: {usuario_input} el {ahora_r.strftime('%d/%m/%Y %H:%M:%S')}"
-                                    motivo_r = f"Reubicación de {st.session_state['prof_desplazado']}"
-                                    
-                                    # Calculamos la fila de la reubicación
-                                    siguiente_fila_r = len(hoja_r.col_values(6)) + 1
-                                    
-                                    # Guardamos en el Sheet
-                                    hoja_r.update(range_name=f"F{siguiente_fila_r}:J{siguiente_fila_r}", 
-                                                  values=[[datos_r['fecha'], datos_r['dia'], datos_r['bloque'], espacio_reubicar, motivo_r]], 
-                                                  value_input_option='USER_ENTERED')
-                                    hoja_r.update(range_name=f"L{siguiente_fila_r}", 
-                                                  values=[[audit_r]], 
-                                                  value_input_option='USER_ENTERED')
-                                    
-                                    # GUARDAMOS EL ÍNDICE PARA PODER BORRARLO LUEGO SI ES NECESARIO
-                                    st.session_state['fila_reubicacion'] = siguiente_fila_r
-                                    st.session_state['reubicacion_resuelta'] = True
-                                    
-                                    st.success(f"¡Listo! Se asignó a {st.session_state['prof_desplazado']} en **{espacio_reubicar}**.")
-                                    st.cache_data.clear()
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Error al guardar reubicación: {e}")
-                            else:
-                                st.warning("⚠️ Seleccioná un espacio de la lista.")
-                
-                with col_r2 if libres_completos else st.container():
-                    if st.button("🗣️ Hablaré con el profesor", use_container_width=True):
-                        st.session_state['reubicacion_resuelta'] = True
+                if st.button("⚠️ Me equivoqué, cancelar esta reserva", type="primary"):
+                    try:
+                        doc_borrar = cliente.open("2026 ámbitos automatizado 2026")
+                        hoja_borrar = doc_borrar.worksheet("Espacios Libres")
+                        
+                        fila_orig = st.session_state['ultima_fila']
+                        hoja_borrar.update(range_name=f"F{fila_orig}:J{fila_orig}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
+                        hoja_borrar.update(range_name=f"L{fila_orig}", values=[[""]], value_input_option='USER_ENTERED')
+                        
+                        if 'fila_reubicacion' in st.session_state:
+                            fila_reub = st.session_state['fila_reubicacion']
+                            hoja_borrar.update(range_name=f"F{fila_reub}:J{fila_reub}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
+                            hoja_borrar.update(range_name=f"L{fila_reub}", values=[[""]], value_input_option='USER_ENTERED')
+                            mensaje_extra = " y la reubicación del profesor"
+                        else:
+                            mensaje_extra = ""
+                        
+                        st.success(f"🗑️ ¡La reserva{mensaje_extra} fue anulada! El sistema quedó limpio.")
+                        
+                        for clave in ['ultima_fila', 'ultimo_resumen', 'prof_desplazado', 'reubicacion_resuelta', 'reserva_datos', 'fila_reubicacion']:
+                            if clave in st.session_state:
+                                del st.session_state[clave]
+                        
+                        st.cache_data.clear()
                         st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al cancelar la reserva: {e}")
+
+                # --- SECCIÓN: REUBICACIÓN INTERACTIVA ---
+                if st.session_state.get('prof_desplazado') and not st.session_state.get('reubicacion_resuelta', False):
+                    st.divider()
+                    st.subheader(f"📍 Reubicar a {st.session_state['prof_desplazado']}")
+                    
+                    if libres_completos:
+                        opciones_libres = ["Seleccionar un espacio..."] + libres_completos
+                        espacio_reubicar = st.selectbox("Elegí un nuevo ámbito para el profesor:", opciones_libres)
+                        
+                        col_r1, col_r2 = st.columns(2)
+                        
+                        with col_r1:
+                            if st.button("✅ Confirmar Reubicación", type="primary", use_container_width=True):
+                                if espacio_reubicar != "Seleccionar un espacio...":
+                                    try:
+                                        doc_r = cliente.open("2026 ámbitos automatizado 2026")
+                                        hoja_r = doc_r.worksheet("Espacios Libres")
+                                        
+                                        datos_r = st.session_state['reserva_datos']
+                                        ahora_r = datetime.now() - timedelta(hours=3)
+                                        audit_r = f"Reubicado por: {usuario_input} el {ahora_r.strftime('%d/%m/%Y %H:%M:%S')}"
+                                        motivo_r = f"Reubicación de {st.session_state['prof_desplazado']}"
+                                        
+                                        siguiente_fila_r = len(hoja_r.col_values(6)) + 1
+                                        
+                                        hoja_r.update(range_name=f"F{siguiente_fila_r}:J{siguiente_fila_r}", 
+                                                      values=[[datos_r['fecha'], datos_r['dia'], datos_r['bloque'], espacio_reubicar, motivo_r]], 
+                                                      value_input_option='USER_ENTERED')
+                                        hoja_r.update(range_name=f"L{siguiente_fila_r}", 
+                                                      values=[[audit_r]], 
+                                                      value_input_option='USER_ENTERED')
+                                        
+                                        st.session_state['fila_reubicacion'] = siguiente_fila_r
+                                        st.session_state['reubicacion_resuelta'] = True
+                                        
+                                        st.success(f"¡Listo! Se asignó a {st.session_state['prof_desplazado']} en **{espacio_reubicar}**.")
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error al guardar reubicación: {e}")
+                                else:
+                                    st.warning("⚠️ Seleccioná un espacio de la lista.")
+                    
+                    with col_r2 if libres_completos else st.container():
+                        if st.button("🗣️ Hablaré con el profesor", use_container_width=True):
+                            st.session_state['reubicacion_resuelta'] = True
+                            st.rerun()
 
     # --- PESTAÑA 2: BUSCAR DOCENTE/CURSO ---
     with tab2:
