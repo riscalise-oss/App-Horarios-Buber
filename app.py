@@ -615,7 +615,7 @@ try:
                             
                             datos_hoja = hoja_libres.get_all_values()
                             f_nueva = fecha_input.strftime("%d/%m/%Y")
-                            b_nuevo = str(bloque_input)
+                            b_nuevo = str(bloques_input)
                             e_nuevo = str(espacio_input).strip().upper()
                             
                             ya_existe = False
@@ -651,14 +651,14 @@ try:
                                 siguiente_fila = len(columna_f) + 1
 
                                 rango_datos = f"F{siguiente_fila}:J{siguiente_fila}"
-                                valores_datos = [[f_nueva, dia_calculado, int(bloque_input), espacio_input, motivo_input]]
+                                valores_datos = [[f_nueva, dia_calculado, int(bloques_input), espacio_input, motivo_input]]
                                 hoja_libres.update(range_name=rango_datos, values=valores_datos, value_input_option='USER_ENTERED')
 
                                 rango_audit = f"L{siguiente_fila}"
                                 valores_audit = [[audit_info]]
                                 hoja_libres.update(range_name=rango_audit, values=valores_audit, value_input_option='USER_ENTERED')
 
-                                resumen = f"**{dia_calculado} {f_nueva}** | Bloque **{bloque_input}** | **{espacio_input}** ({motivo_input})"
+                                resumen = f"**{dia_calculado} {f_nueva}** | Bloque **{bloques_input}** | **{espacio_input}** ({motivo_input})"
                                 st.session_state['ultima_fila'] = siguiente_fila
                                 st.session_state['ultimo_resumen'] = resumen
                                 st.session_state['reubicacion_resuelta'] = False
