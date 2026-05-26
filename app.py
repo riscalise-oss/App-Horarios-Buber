@@ -665,7 +665,7 @@ try:
                                 st.session_state['reserva_datos'] = {
                                     'fecha': f_nueva,
                                     'dia': dia_calculado,
-                                    'bloque': int(bloque_input)
+                                    'bloques': int(bloques_input)
                                 }
                                 
                                 if profesor_desplazado:
