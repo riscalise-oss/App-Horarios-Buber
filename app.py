@@ -492,16 +492,119 @@ try:
                 usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
                 clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
 
-                with st.form("formulario_reserva", clear_on_submit=True):
+               with st.form("formulario_reserva", clear_on_submit=True):
                     col1, col2 = st.columns(2)
                     with col1:
-                        bloque_input = st.selectbox("Bloque", ["1", "2", "3", "4", "5", "6"], index=index_bloque)
+                        # 1. CAMBIO PRINCIPAL: multiselect en lugar de selectbox
+                        bloques_input = st.multiselect(
+                            "Bloque(s)", 
+                            ["1", "2", "3", "4", "5", "6"], 
+                            default=[str(index_bloque + 1)]
+                        )
                     with col2:
                         espacio_input = st.selectbox("Espacio", lista_ambitos_dinamicos_form)
                         
                     motivo_input = st.text_input("Motivo (Ej: Acto 5to año)")
                     boton_guardar = st.form_submit_button("Guardar Reserva")
 
+                if boton_guardar:
+                    if clave_input != "Buber2026":
+                        st.error("❌ Clave de autorización incorrecta. No tienes permiso para realizar reservas.")
+                    elif not bloques_input:
+                        st.warning("⚠️ Tenés que seleccionar al menos un bloque.")
+                    elif motivo_input and usuario_input:
+                        try:
+                            hoja_libres = doc_conf.worksheet("Espacios Libres")
+                            hoja_asignaciones = doc_conf.worksheet("Asignaciones") 
+                            
+                            datos_hoja = hoja_libres.get_all_values()
+                            f_nueva = fecha_input.strftime("%d/%m/%Y")
+                            e_nuevo = str(espacio_input).strip().upper()
+                            
+                            # 2. VALIDACIÓN ATÓMICA: Revisamos todos los bloques antes de guardar nada
+                            bloques_con_conflicto = []
+                            for b_nuevo in bloques_input:
+                                for fila in datos_hoja:
+                                    if len(fila) >= 9:
+                                        if fila[5] == f_nueva and str(fila[7]) == b_nuevo and str(fila[8]).strip().upper() == e_nuevo:
+                                            bloques_con_conflicto.append(b_nuevo)
+                                            break
+                            
+                            if bloques_con_conflicto:
+                                st.error(f"❌ Operación cancelada: El espacio {espacio_input} ya está reservado en los bloques: {', '.join(bloques_con_conflicto)}.")
+                            else:
+                                # 3. BUSCAR DESPLAZADOS POR CADA BLOQUE
+                                datos_asig = hoja_asignaciones.get_all_values()
+                                profesores_desplazados = []
+                                
+                                for b_nuevo in bloques_input:
+                                    for fila_asig in datos_asig[1:]: 
+                                        if len(fila_asig) >= 6:
+                                            dia_a = str(fila_asig[0]).strip().upper()
+                                            blq_a = str(fila_asig[1]).strip().upper()
+                                            esp_a = str(fila_asig[3]).strip().upper()
+                                            
+                                            if dia_a == dia_calculado.strip().upper() and blq_a == b_nuevo and esp_a == e_nuevo:
+                                                materia_desplazada = str(fila_asig[4]).strip()
+                                                profesor_desplazado = str(fila_asig[5]).strip()
+                                                profesores_desplazados.append({
+                                                    'profesor': profesor_desplazado, 
+                                                    'materia': materia_desplazada,
+                                                    'bloque': b_nuevo
+                                                })
+                                                break 
+                                
+                                # 4. PREPARAR DATOS Y GUARDAR EN LOTE
+                                ahora_str = (datetime.now() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M:%S")
+                                audit_info = f"Registrado por: {usuario_input} el {ahora_str}"
+                                
+                                columna_f = hoja_libres.col_values(6) 
+                                fila_inicial = len(columna_f) + 1
+                                fila_final = fila_inicial + len(bloques_input) - 1
+                                
+                                # Preparamos todas las filas a insertar
+                                valores_datos = []
+                                valores_audit = []
+                                for b_nuevo in bloques_input:
+                                    valores_datos.append([f_nueva, dia_calculado, int(b_nuevo), espacio_input, motivo_input])
+                                    valores_audit.append([audit_info])
+
+                                # Escribimos en Sheets
+                                hoja_libres.update(range_name=f"F{fila_inicial}:J{fila_final}", values=valores_datos, value_input_option='USER_ENTERED')
+                                hoja_libres.update(range_name=f"L{fila_inicial}:L{fila_final}", values=valores_audit, value_input_option='USER_ENTERED')
+
+                                # 5. ACTUALIZAR ESTADOS Y MOSTRAR MENSAJES
+                                resumen_bloques = ", ".join(bloques_input)
+                                resumen = f"**{dia_calculado} {f_nueva}** | Bloques **{resumen_bloques}** | **{espacio_input}** ({motivo_input})"
+                                
+                                st.session_state['ultima_fila_inicio'] = fila_inicial
+                                st.session_state['ultima_fila_fin'] = fila_final
+                                st.session_state['ultimo_resumen'] = resumen
+                                st.session_state['reubicacion_resuelta'] = False
+                                
+                                # Guardamos datos para posible reubicación
+                                st.session_state['reserva_datos'] = {
+                                    'fecha': f_nueva,
+                                    'dia': dia_calculado,
+                                    'bloques': bloques_input # Ahora es una lista
+                                }
+                                
+                                if profesores_desplazados:
+                                    # Guardamos la lista completa para el módulo de reubicación
+                                    st.session_state['profes_desplazados'] = profesores_desplazados
+                                    
+                                    mensajes_profes = "\n".join([f"👉 **{p['profesor']}** ({p['materia']}) en el Bloque {p['bloque']}" for p in profesores_desplazados])
+                                    st.warning(f"⚠️ **¡Reservas guardadas!** Pero atención, desplazaste a:\n\n{mensajes_profes}\n\n📍 {resumen}")
+                                else:
+                                    st.session_state['profes_desplazados'] = []
+                                    st.success(f"✅ ¡Reservas guardadas con éxito! No se desplazó a ningún profesor.\n\n👉 {resumen}")
+                                    st.balloons()
+                                
+                                st.cache_data.clear()
+                        except Exception as e:
+                            st.error(f"Error al guardar: {e}")
+                    else:
+                        st.warning("⚠️ Completá tu Nombre y el Motivo antes de guardar.")
                 if boton_guardar:
                     if clave_input != "Buber2026":
                         st.error("❌ Clave de autorización incorrecta. No tienes permiso para realizar reservas.")
