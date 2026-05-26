@@ -492,7 +492,7 @@ try:
                 usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
                 clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
 
-               with st.form("formulario_reserva", clear_on_submit=True):
+                with st.form("formulario_reserva", clear_on_submit=True):
                     col1, col2 = st.columns(2)
                     with col1:
                         # 1. CAMBIO PRINCIPAL: multiselect en lugar de selectbox
