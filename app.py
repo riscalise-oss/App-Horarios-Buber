@@ -588,7 +588,6 @@ try:
                                     'dia': dia_calculado,
                                     'bloques': bloques_input # Ahora usamos la lista plural
                                 }
-                                }
                                 
                                 if profesores_desplazados:
                                     # Guardamos la lista completa para el módulo de reubicación
