@@ -586,7 +586,8 @@ try:
                                 st.session_state['reserva_datos'] = {
                                     'fecha': f_nueva,
                                     'dia': dia_calculado,
-                                    'bloques': bloques_input # Ahora es una lista
+                                    'bloques': bloques_input # Ahora usamos la lista plural
+                                }
                                 }
                                 
                                 if profesores_desplazados:
