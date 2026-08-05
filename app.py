@@ -135,15 +135,15 @@ def cargar_datos():
         if pd.to_datetime(df_config[5], errors='coerce', dayfirst=True).notna().sum() > 0:
             col_fecha = 5
 
-    # FIX DE ZONA HORARIA ARGENTINA (-3)
+    # FIX: Zona horaria para evitar fallos a las 21:00 hs
     ahora_arg = datetime.utcnow() - timedelta(hours=3)
-    hoy_ts = pd.Timestamp(ahora_arg.year, ahora_arg.month, ahora_arg.day)
-    manana_ts = hoy_ts + pd.Timedelta(days=1)
-    limite_2_semanas_ts = manana_ts + pd.Timedelta(days=14)
+    hoy = pd.Timestamp(ahora_arg.year, ahora_arg.month, ahora_arg.day)
+    manana = hoy + pd.Timedelta(days=1)
+    limite_2_semanas = manana + pd.Timedelta(days=14)
 
     if col_fecha is not None:
         df_config['TEMP_FECHA'] = pd.to_datetime(df_config[col_fecha], errors='coerce', dayfirst=True)
-        mask = df_config['TEMP_FECHA'].isna() | (df_config['TEMP_FECHA'] >= hoy_ts)
+        mask = df_config['TEMP_FECHA'].isna() | (df_config['TEMP_FECHA'] >= hoy)
         df_config = df_config[mask]
         df_config = df_config.sort_values(by='TEMP_FECHA', na_position='first')
     else:
@@ -166,65 +166,51 @@ def cargar_datos():
         if col_str.str.contains("MOTIVO", case=False, na=False).any():
             col_motivo = col
             
-    def procesar_y_guardar_aviso(texto_base, fecha_reserva):
-        # Usamos .date() para una comparación a prueba de errores
-        if pd.isna(fecha_reserva):
+    def procesar_y_guardar_aviso(texto_base, fecha_reserva, row_data):
+        if pd.isna(fecha_reserva) or fecha_reserva == hoy:
             if texto_base not in avisos["hoy"]: avisos["hoy"].append(texto_base)
+        elif fecha_reserva == manana:
+            if texto_base not in avisos["manana"]: avisos["manana"].append(texto_base)
+        elif fecha_reserva <= limite_2_semanas:
+            fecha_str = fecha_reserva.strftime('%d/%m')
+            texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
+            if texto_con_fecha not in avisos["proximas"]: avisos["proximas"].append(texto_con_fecha)
         else:
-            fecha_date = fecha_reserva.date()
-            if fecha_date == hoy_ts.date():
-                if texto_base not in avisos["hoy"]: avisos["hoy"].append(texto_base)
-            elif fecha_date == manana_ts.date():
-                if texto_base not in avisos["manana"]: avisos["manana"].append(texto_base)
-            elif fecha_reserva <= limite_2_semanas_ts:
-                fecha_str = fecha_reserva.strftime('%d/%m')
-                texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
-                if texto_con_fecha not in avisos["proximas"]: avisos["proximas"].append(texto_con_fecha)
-            else:
-                fecha_str = fecha_reserva.strftime('%d/%m')
-                texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
-                if texto_con_fecha not in avisos["futuras"]: avisos["futuras"].append(texto_con_fecha)
+            fecha_str = fecha_reserva.strftime('%d/%m')
+            texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
+            if texto_con_fecha not in avisos["futuras"]: avisos["futuras"].append(texto_con_fecha)
+            
+        lista_todas_reservas.append({
+            'texto_base': texto_base,
+            'fecha': fecha_reserva,
+            'row': row_data
+        })
 
-    # RECOLECTAMOS TODAS LAS RESERVAS Y ARMAMOS EL RADAR
-    for idx, row in df_config.iterrows():
-        fecha_val = row['TEMP_FECHA']
-        texto_final = ""
-        
-        # 1. Buscamos avisos generales
-        if col_avisos is not None:
+    if col_avisos is not None:
+        for idx, row in df_config.iterrows():
             aviso_ppal = str(row[col_avisos]).strip()
+            
             if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "NAT", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
                 texto_final = aviso_ppal
+                
                 if col_motivo is not None:
                     aviso_motivo = str(row[col_motivo]).strip()
                     if aviso_motivo and aviso_motivo.upper() not in ["", "NAN", "NAT", "MOTIVO", "NONE"]:
                         texto_final += f" 👉 *Motivo: {aviso_motivo}*"
+                
                 if col_desplaza is not None:
                     aviso_profe = str(row[col_desplaza]).strip()
                     if aviso_profe and aviso_profe.upper() not in ["", "NAN", "NAT", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
                         texto_final += f"   {aviso_profe}"
-        
-        # 2. Si no hay aviso, buscamos por Emojis
-        if not texto_final:
+                        
+                procesar_y_guardar_aviso(texto_final, row['TEMP_FECHA'], row)
+    else:
+        for idx, row in df_config.iterrows():
+            # FIX Pandas 3.0: usamos .tolist() en lugar de .values
             celdas_con_alerta = [str(x).strip() for x in row.tolist() if pd.notna(x) and ("⚠️" in str(x) or "🔴" in str(x) or "🟡" in str(x))]
             if celdas_con_alerta:
-                texto_final = "   ".join(celdas_con_alerta)
-        
-        # 3. Si sigue sin haber texto, armamos uno genérico con la reserva
-        if not texto_final:
-            esp = str(row[8]).strip() if len(row) > 8 else ""
-            mot = str(row[9]).strip() if len(row) > 9 else ""
-            if esp and esp.upper() not in ["", "NAN", "ESPACIOS"]:
-                texto_final = esp
-                if mot and mot.upper() not in ["", "NAN", "MOTIVO"]:
-                    texto_final += f" ({mot})"
-        
-        # 4. Guardamos la fila SIEMPRE, para que el radar visual funcione
-        if texto_final and texto_final.upper() not in ["", "NAN"]:
-            procesar_y_guardar_aviso(texto_final, fecha_val)
-            lista_todas_reservas.append({'texto_base': texto_final, 'fecha': fecha_val, 'row': row})
-        else:
-            lista_todas_reservas.append({'texto_base': "Reserva de Espacio", 'fecha': fecha_val, 'row': row})
+                texto_unido = "   ".join(celdas_con_alerta)
+                procesar_y_guardar_aviso(texto_unido, row['TEMP_FECHA'], row)
 
     if 'DIA' in df_o.columns:
         df_o['DIA'] = df_o['DIA'].astype(str).map(quitar_tildes)
@@ -318,13 +304,12 @@ try:
         # =========================================================================
         # 🚀 AVISO INTELIGENTE "SOLO POR HOY" (ETIQUETA VISUAL) 🚀
         # =========================================================================
-        # FIX DEFINITIVO: Usar números de día para evitar bugs por idioma del servidor
         ahora_arg_ts = datetime.utcnow() - timedelta(hours=3)
-        hoy_date_estricto = ahora_arg_ts.date()
+        hoy_ts = pd.Timestamp(ahora_arg_ts.year, ahora_arg_ts.month, ahora_arg_ts.day)
         
-        opciones_dias_str = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
-        dia_hoy_str = opciones_dias_str[ahora_arg_ts.weekday()] # 0=Lunes, 1=Martes... Inmune a idiomas!
-        
+        # FIX: Evitamos error por idioma del servidor usando índices numéricos
+        opciones_dias = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+        dia_hoy_str = opciones_dias[ahora_arg_ts.weekday()]
         dia_elegido_clean = quitar_tildes(dia_elegido)
         
         espacios_reservados_hoy = set()
@@ -332,12 +317,12 @@ try:
         if dia_elegido_clean == dia_hoy_str:
             for res in lista_todas_reservas:
                 fecha = res['fecha']
-                # Verificación blindada de fecha exacta
-                if pd.notna(fecha) and fecha.date() == hoy_date_estricto:
+                if pd.notna(fecha) and fecha == hoy_ts:
                     row_data = res['row']
+                    
                     coincide_bloque = False
                     tiene_algun_bloque = False
-                    
+                    # FIX Pandas 3.0: .tolist()
                     for val in row_data.tolist():
                         val_str = str(val).strip().upper()
                         numeros_en_celda = re.findall(r'\d+', val_str)
@@ -348,6 +333,7 @@ try:
                             
                     if coincide_bloque or not tiene_algun_bloque:
                         for e in todos_los_espacios:
+                            # FIX Pandas 3.0: .tolist()
                             if any(e == str(x).strip().upper() for x in row_data.tolist()):
                                 espacios_reservados_hoy.add(e)
 
@@ -393,13 +379,12 @@ try:
         reservas_radar_todas = []
         dia_buscado = quitar_tildes(dia_elegido)
         
-        limite_2_sem_date = hoy_date_estricto + timedelta(days=15)
+        # FIX Zona horaria en el radar
+        ahora_arg_radar = datetime.utcnow() - timedelta(hours=3)
+        hoy_ts_radar = pd.Timestamp(ahora_arg_radar.year, ahora_arg_radar.month, ahora_arg_radar.day)
+        limite_2_sem_ts = hoy_ts_radar + pd.Timedelta(days=15)
         
         for res in lista_todas_reservas:
-            # Filtro para que el radar visual no muestre texto genérico si no hay nada escrito
-            if res['texto_base'] == "Reserva de Espacio":
-                continue
-                
             fecha = res['fecha']
             row_data = res['row']
             
@@ -407,13 +392,15 @@ try:
             es_futura_o_hoy = False
             
             if pd.notna(fecha):
-                if fecha.date() >= hoy_date_estricto:
+                if fecha >= hoy_ts_radar:
                     es_futura_o_hoy = True
-                    # FIX: Misma solución inmune al idioma para fechas futuras
-                    if opciones_dias_str[fecha.weekday()] == dia_buscado:
+                    # FIX: Inmune a idiomas
+                    opciones_dias_radar = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+                    if opciones_dias_radar[fecha.weekday()] == dia_buscado:
                         es_dia_buscado = True
             else:
                 es_futura_o_hoy = True
+                # FIX Pandas 3.0
                 texto_fila = " ".join([str(x).upper() for x in row_data.tolist()])
                 if dia_buscado in texto_fila:
                     es_dia_buscado = True
@@ -422,6 +409,7 @@ try:
                 coincide_bloque = False
                 tiene_algun_bloque = False
                 
+                # FIX Pandas 3.0
                 for val in row_data.tolist():
                     val_str = str(val).strip().upper()
                     numeros_en_celda = re.findall(r'\d+', val_str)
@@ -442,7 +430,7 @@ try:
                         
                         if texto_largo not in reservas_radar_todas:
                             reservas_radar_todas.append(texto_largo)
-                            if fecha.date() <= limite_2_sem_date:
+                            if fecha <= limite_2_sem_ts:
                                 reservas_radar_cercanas.append(texto_corto)
                     else:
                         texto_generico = f"🎯 **[Frecuente/Día Completo]** {res['texto_base']}"
@@ -546,6 +534,7 @@ try:
                             f_nueva = fecha_input.strftime("%d/%m/%Y")
                             e_nuevo = str(espacio_input).strip().upper()
                             
+                            # FIX DE SUPERPOSICIÓN GARANTIZADO
                             bloques_con_conflicto = []
                             for b_nuevo in bloques_input:
                                 for fila in datos_hoja:
