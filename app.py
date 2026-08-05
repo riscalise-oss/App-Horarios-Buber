@@ -185,11 +185,12 @@ def cargar_datos():
                 texto_con_fecha = f"🗓️ **[{fecha_str}]** {texto_base}"
                 if texto_con_fecha not in avisos["futuras"]: avisos["futuras"].append(texto_con_fecha)
 
-    # RECOLECTAMOS TODAS LAS RESERVAS SIN IMPORTAR SI TIENEN EMOJI O NO
+    # RECOLECTAMOS TODAS LAS RESERVAS Y ARMAMOS EL RADAR
     for idx, row in df_config.iterrows():
         fecha_val = row['TEMP_FECHA']
         texto_final = ""
         
+        # 1. Buscamos avisos generales
         if col_avisos is not None:
             aviso_ppal = str(row[col_avisos]).strip()
             if aviso_ppal and aviso_ppal.upper() not in ["", "NAN", "NAT", "ESPACIOS BLOQUEADOS / RESERVADOS", "ESPACIOS BLOQUEADOS"]:
@@ -202,24 +203,27 @@ def cargar_datos():
                     aviso_profe = str(row[col_desplaza]).strip()
                     if aviso_profe and aviso_profe.upper() not in ["", "NAN", "NAT", "AVISAR AL PROFESOR", "#N/A", "#REF!", "NONE"]:
                         texto_final += f"   {aviso_profe}"
-        else:
+        
+        # 2. Si no hay aviso, buscamos por Emojis
+        if not texto_final:
             celdas_con_alerta = [str(x).strip() for x in row.tolist() if pd.notna(x) and ("⚠️" in str(x) or "🔴" in str(x) or "🟡" in str(x))]
             if celdas_con_alerta:
                 texto_final = "   ".join(celdas_con_alerta)
-            else:
-                # Recolector generico de columnas 8 (espacio) y 9 (motivo) si falla lo anterior
-                esp = str(row[8]).strip() if len(row) > 8 else ""
-                mot = str(row[9]).strip() if len(row) > 9 else ""
-                if esp and esp.upper() != "NAN" and esp.upper() != "ESPACIOS":
-                    texto_final = esp
-                    if mot and mot.upper() != "NAN":
-                        texto_final += f" ({mot})"
         
-        if texto_final:
+        # 3. Si sigue sin haber texto, armamos uno genérico con la reserva
+        if not texto_final:
+            esp = str(row[8]).strip() if len(row) > 8 else ""
+            mot = str(row[9]).strip() if len(row) > 9 else ""
+            if esp and esp.upper() not in ["", "NAN", "ESPACIOS"]:
+                texto_final = esp
+                if mot and mot.upper() not in ["", "NAN", "MOTIVO"]:
+                    texto_final += f" ({mot})"
+        
+        # 4. Guardamos la fila SIEMPRE, para que el radar visual funcione
+        if texto_final and texto_final.upper() not in ["", "NAN"]:
             procesar_y_guardar_aviso(texto_final, fecha_val)
             lista_todas_reservas.append({'texto_base': texto_final, 'fecha': fecha_val, 'row': row})
         else:
-            # Siempre se guarda en la memoria profunda para bloquear el cartel de HOY
             lista_todas_reservas.append({'texto_base': "Reserva de Espacio", 'fecha': fecha_val, 'row': row})
 
     if 'DIA' in df_o.columns:
@@ -314,12 +318,13 @@ try:
         # =========================================================================
         # 🚀 AVISO INTELIGENTE "SOLO POR HOY" (ETIQUETA VISUAL) 🚀
         # =========================================================================
-        # Usamos fechas estrictas .date() para que NUNCA falle la comparación
+        # FIX DEFINITIVO: Usar números de día para evitar bugs por idioma del servidor
         ahora_arg_ts = datetime.utcnow() - timedelta(hours=3)
         hoy_date_estricto = ahora_arg_ts.date()
         
-        mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES', 'Saturday': 'SABADO', 'Sunday': 'DOMINGO'}
-        dia_hoy_str = mapa_dias.get(ahora_arg_ts.strftime('%A'), "").upper()
+        opciones_dias_str = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+        dia_hoy_str = opciones_dias_str[ahora_arg_ts.weekday()] # 0=Lunes, 1=Martes... Inmune a idiomas!
+        
         dia_elegido_clean = quitar_tildes(dia_elegido)
         
         espacios_reservados_hoy = set()
@@ -327,7 +332,7 @@ try:
         if dia_elegido_clean == dia_hoy_str:
             for res in lista_todas_reservas:
                 fecha = res['fecha']
-                # Verificación blindada: Compara estrictamente solo las fechas sin horarios
+                # Verificación blindada de fecha exacta
                 if pd.notna(fecha) and fecha.date() == hoy_date_estricto:
                     row_data = res['row']
                     coincide_bloque = False
@@ -391,7 +396,7 @@ try:
         limite_2_sem_date = hoy_date_estricto + timedelta(days=15)
         
         for res in lista_todas_reservas:
-            # Filtro visual para no sobrecargar si no tiene texto (se usa para bloqueo interno)
+            # Filtro para que el radar visual no muestre texto genérico si no hay nada escrito
             if res['texto_base'] == "Reserva de Espacio":
                 continue
                 
@@ -404,8 +409,8 @@ try:
             if pd.notna(fecha):
                 if fecha.date() >= hoy_date_estricto:
                     es_futura_o_hoy = True
-                    mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES'}
-                    if mapa_dias.get(fecha.day_name()) == dia_buscado:
+                    # FIX: Misma solución inmune al idioma para fechas futuras
+                    if opciones_dias_str[fecha.weekday()] == dia_buscado:
                         es_dia_buscado = True
             else:
                 es_futura_o_hoy = True
