@@ -244,15 +244,19 @@ try:
     with tab1:
         col_dia, col_bloque = st.columns(2)
         dias_disponibles = df_ocupados.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
-        dia_elegido = col_dia.selectbox("📅 Día:", dias_disponibles)
+        
+        # NUEVO: Guardar selección del Día en sesión (UX)
+        dia_elegido = col_dia.selectbox("📅 Día:", dias_disponibles, key="memoria_dia")
         
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
         
+        # NUEVO: Guardar selección del Bloque en sesión (UX)
         bloque_elegido = col_bloque.selectbox(
             "⏰ Bloque:", 
             bloques_ordenados,
-            format_func=lambda x: traductor_bloques.get(str(x), f"Bloque {x}")
+            format_func=lambda x: traductor_bloques.get(str(x), f"Bloque {x}"),
+            key="memoria_bloque"
         )
 
         st.divider()
@@ -506,7 +510,8 @@ try:
                 usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
                 clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
 
-                with st.form("formulario_reserva", clear_on_submit=True):
+                # NUEVO: clear_on_submit=False para que no se borre mientras piensa (UX)
+                with st.form("formulario_reserva", clear_on_submit=False):
                     col1, col2 = st.columns(2)
                     with col1:
                         bloques_input = st.multiselect(
@@ -611,6 +616,8 @@ try:
                                     st.balloons()
                                 
                                 st.cache_data.clear()
+                                # IMPORTANTE: Al dejar clear_on_submit=False forzamos la recarga así
+                                st.rerun() 
                         except Exception as e:
                             st.error(f"Error al guardar: {e}")
                     else:
