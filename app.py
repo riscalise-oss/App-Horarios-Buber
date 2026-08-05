@@ -135,7 +135,9 @@ def cargar_datos():
         if pd.to_datetime(df_config[5], errors='coerce', dayfirst=True).notna().sum() > 0:
             col_fecha = 5
 
-    hoy = pd.Timestamp('today').normalize()
+    # FIX DE ZONA HORARIA
+    ahora_arg = datetime.utcnow() - timedelta(hours=3)
+    hoy = pd.Timestamp(ahora_arg.year, ahora_arg.month, ahora_arg.day)
     manana = hoy + pd.Timedelta(days=1)
     limite_2_semanas = manana + pd.Timedelta(days=14)
 
@@ -204,7 +206,8 @@ def cargar_datos():
                 procesar_y_guardar_aviso(texto_final, row['TEMP_FECHA'], row)
     else:
         for idx, row in df_config.iterrows():
-            celdas_con_alerta = [str(x).strip() for x in row.values if pd.notna(x) and ("⚠️" in str(x) or "🔴" in str(x) or "🟡" in str(x))]
+            # FIX DE PANDAS (.values a .tolist())
+            celdas_con_alerta = [str(x).strip() for x in row.tolist() if pd.notna(x) and ("⚠️" in str(x) or "🔴" in str(x) or "🟡" in str(x))]
             if celdas_con_alerta:
                 texto_unido = "   ".join(celdas_con_alerta)
                 procesar_y_guardar_aviso(texto_unido, row['TEMP_FECHA'], row)
@@ -301,7 +304,11 @@ try:
         # =========================================================================
         # 🚀 AVISO INTELIGENTE "SOLO POR HOY" (ETIQUETA VISUAL) 🚀
         # =========================================================================
-        hoy_ts = pd.Timestamp('today').normalize()
+        
+        # FIX DE ZONA HORARIA NOCTURNA
+        ahora_arg_ts = datetime.utcnow() - timedelta(hours=3)
+        hoy_ts = pd.Timestamp(ahora_arg_ts.year, ahora_arg_ts.month, ahora_arg_ts.day)
+        
         mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES', 'Saturday': 'SABADO', 'Sunday': 'DOMINGO'}
         dia_hoy_str = mapa_dias.get(hoy_ts.day_name(), "")
         dia_elegido_clean = quitar_tildes(dia_elegido)
@@ -316,7 +323,9 @@ try:
                     
                     coincide_bloque = False
                     tiene_algun_bloque = False
-                    for val in row_data.values:
+                    
+                    # FIX DE PANDAS (.values a .tolist())
+                    for val in row_data.tolist():
                         val_str = str(val).strip().upper()
                         numeros_en_celda = re.findall(r'\d+', val_str)
                         if str(bloque_elegido) in numeros_en_celda or f"BLOQUE {bloque_elegido}" in val_str or f"B{bloque_elegido}" in val_str:
@@ -326,7 +335,8 @@ try:
                             
                     if coincide_bloque or not tiene_algun_bloque:
                         for e in todos_los_espacios:
-                            if any(e == str(x).strip().upper() for x in row_data.values):
+                            # FIX DE PANDAS (.values a .tolist())
+                            if any(e == str(x).strip().upper() for x in row_data.tolist()):
                                 espacios_reservados_hoy.add(e)
 
         def formatear_espacio(e):
@@ -370,8 +380,11 @@ try:
         reservas_radar_cercanas = []
         reservas_radar_todas = []
         dia_buscado = quitar_tildes(dia_elegido)
-        hoy_ts = pd.Timestamp('today').normalize()
-        limite_2_sem_ts = hoy_ts + pd.Timedelta(days=15)
+        
+        # FIX DE ZONA HORARIA
+        ahora_arg_radar = datetime.utcnow() - timedelta(hours=3)
+        hoy_ts_radar = pd.Timestamp(ahora_arg_radar.year, ahora_arg_radar.month, ahora_arg_radar.day)
+        limite_2_sem_ts = hoy_ts_radar + pd.Timedelta(days=15)
         
         for res in lista_todas_reservas:
             fecha = res['fecha']
@@ -381,14 +394,14 @@ try:
             es_futura_o_hoy = False
             
             if pd.notna(fecha):
-                if fecha >= hoy_ts:
+                if fecha >= hoy_ts_radar:
                     es_futura_o_hoy = True
                     mapa_dias = {'Monday': 'LUNES', 'Tuesday': 'MARTES', 'Wednesday': 'MIERCOLES', 'Thursday': 'JUEVES', 'Friday': 'VIERNES'}
                     if mapa_dias.get(fecha.day_name()) == dia_buscado:
                         es_dia_buscado = True
             else:
                 es_futura_o_hoy = True
-                texto_fila = " ".join([str(x).upper() for x in row_data.values])
+                texto_fila = " ".join([str(x).upper() for x in row_data.tolist()]) # FIX DE PANDAS
                 if dia_buscado in texto_fila:
                     es_dia_buscado = True
                     
@@ -396,7 +409,8 @@ try:
                 coincide_bloque = False
                 tiene_algun_bloque = False
                 
-                for val in row_data.values:
+                # FIX DE PANDAS (.values a .tolist())
+                for val in row_data.tolist():
                     val_str = str(val).strip().upper()
                     numeros_en_celda = re.findall(r'\d+', val_str)
                     
@@ -524,8 +538,14 @@ try:
                             bloques_con_conflicto = []
                             for b_nuevo in bloques_input:
                                 for fila in datos_hoja:
+                                    # FIX DE FECHAS "05/08" vs "5/8"
                                     if len(fila) >= 9:
-                                        if fila[5] == f_nueva and str(fila[7]) == b_nuevo and str(fila[8]).strip().upper() == e_nuevo:
+                                        try:
+                                            fecha_hoja = pd.to_datetime(str(fila[5]).strip(), dayfirst=True).date()
+                                        except:
+                                            fecha_hoja = None
+
+                                        if fecha_hoja == fecha_input and str(fila[7]).strip() == str(b_nuevo).strip() and str(fila[8]).strip().upper() == e_nuevo:
                                             bloques_con_conflicto.append(b_nuevo)
                                             break
                             
