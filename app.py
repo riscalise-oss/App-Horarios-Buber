@@ -245,13 +245,13 @@ try:
         col_dia, col_bloque = st.columns(2)
         dias_disponibles = df_ocupados.sort_values('ORDEN_DIA')['DIA'].dropna().unique().tolist()
         
-        # NUEVO: Guardar selección del Día en sesión (UX)
+        # Guardar selección del Día en sesión (UX)
         dia_elegido = col_dia.selectbox("📅 Día:", dias_disponibles, key="memoria_dia")
         
         bloques_raw = df_ocupados[df_ocupados['DIA'] == dia_elegido]['BLOQUE'].dropna().unique()
         bloques_ordenados = sorted([b for b in bloques_raw if b != "NAN"], key=lambda x: int(x) if x.isdigit() else x)
         
-        # NUEVO: Guardar selección del Bloque en sesión (UX)
+        # Guardar selección del Bloque en sesión (UX)
         bloque_elegido = col_bloque.selectbox(
             "⏰ Bloque:", 
             bloques_ordenados,
@@ -311,7 +311,6 @@ try:
         ahora_arg_ts = datetime.utcnow() - timedelta(hours=3)
         hoy_ts = pd.Timestamp(ahora_arg_ts.year, ahora_arg_ts.month, ahora_arg_ts.day)
         
-        # FIX: Evitamos error por idioma del servidor usando índices numéricos
         opciones_dias = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
         dia_hoy_str = opciones_dias[ahora_arg_ts.weekday()]
         dia_elegido_clean = quitar_tildes(dia_elegido)
@@ -510,7 +509,7 @@ try:
                 usuario_input = col_cred1.text_input("Tu Nombre", key="nombre_usuario", placeholder="Ej: Richard")
                 clave_input = col_cred2.text_input("Clave de Autorización", type="password", key="clave_usuario")
 
-                # NUEVO: clear_on_submit=False para que no se borre mientras piensa (UX)
+                # clear_on_submit=False para que no se borre mientras piensa (UX)
                 with st.form("formulario_reserva", clear_on_submit=False):
                     col1, col2 = st.columns(2)
                     with col1:
@@ -606,17 +605,14 @@ try:
                                     'bloques': bloques_input
                                 }
                                 
+                                # GUARDAMOS LA INFORMACIÓN EN MEMORIA PARA QUE NO SE LA COMA LA RECARGA RÁPIDA
                                 if profesores_desplazados:
                                     st.session_state['profes_desplazados'] = profesores_desplazados
-                                    mensajes_profes = "\n".join([f"👉 **{p['profesor']}** ({p['materia']}) en el Bloque {p['bloque']}" for p in profesores_desplazados])
-                                    st.warning(f"⚠️ **¡Reservas guardadas!** Pero atención, desplazaste a:\n\n{mensajes_profes}\n\n📍 {resumen}")
                                 else:
                                     st.session_state['profes_desplazados'] = []
-                                    st.success(f"✅ ¡Reservas guardadas con éxito! No se desplazó a ningún profesor.\n\n👉 {resumen}")
-                                    st.balloons()
+                                    st.session_state['mostrar_globos'] = True
                                 
                                 st.cache_data.clear()
-                                # IMPORTANTE: Al dejar clear_on_submit=False forzamos la recarga así
                                 st.rerun() 
                         except Exception as e:
                             st.error(f"Error al guardar: {e}")
@@ -626,11 +622,32 @@ try:
         # =========================================================================
         # 🚀 SISTEMA "DESHACER" Y "REUBICAR" ACTUALIZADO
         # =========================================================================
+        # SOLTAMOS LOS GLOBITOS Y MOSTRAMOS MENSAJES LUEGO DE LA RECARGA DE PANTALLA
+        if st.session_state.get('mostrar_globos', False):
+            st.balloons()
+            st.session_state['mostrar_globos'] = False
+            
+        if st.session_state.get('mensaje_cancelado'):
+            st.error(st.session_state['mensaje_cancelado'], icon="🗑️")
+            st.session_state['mensaje_cancelado'] = ""
+
         if 'ultima_fila_inicio' in st.session_state:
             st.divider()
             cliente = conectar_google() 
             if cliente:
-                st.info(f"🔄 **Última reserva realizada por vos:** {st.session_state['ultimo_resumen']}")
+                
+                # RECONSTRUCCIÓN DE MENSAJES DE ÉXITO O ADVERTENCIA
+                if st.session_state.get('profes_desplazados'):
+                    mensajes_p = "\n".join([f"👉 **{p['profesor']}** ({p['materia']}) en el Bloque {p['bloque']}" for p in st.session_state['profes_desplazados']])
+                    if not st.session_state.get('reubicacion_resuelta', False):
+                        st.warning(f"⚠️ **¡Reservas guardadas!** Pero atención, desplazaste a:\n\n{mensajes_p}\n\n📍 {st.session_state['ultimo_resumen']}")
+                    else:
+                        st.success("✅ **¡Profesores reubicados exitosamente!**")
+                else:
+                    st.success(f"✅ **¡Reservas guardadas con éxito!** No se desplazó a ningún profesor.\n\n👉 {st.session_state['ultimo_resumen']}")
+                
+                st.info(f"⚙️ **Panel de opciones de tu última reserva**")
+                
                 if st.button("⚠️ Me equivoqué, cancelar estas reservas", type="primary"):
                     try:
                         doc_borrar = cliente.open("2026 ámbitos automatizado 2026")
@@ -646,15 +663,8 @@ try:
                         hoja_borrar.update(range_name=f"F{fila_ini}:J{fila_fin}", values=filas_vacias, value_input_option='USER_ENTERED')
                         hoja_borrar.update(range_name=f"L{fila_ini}:L{fila_fin}", values=filas_vacias_audit, value_input_option='USER_ENTERED')
                         
-                        if 'filas_reubicacion' in st.session_state:
-                            for fila_reub in st.session_state['filas_reubicacion']:
-                                hoja_borrar.update(range_name=f"F{fila_reub}:J{fila_reub}", values=[["", "", "", "", ""]], value_input_option='USER_ENTERED')
-                                hoja_borrar.update(range_name=f"L{fila_reub}", values=[[""]], value_input_option='USER_ENTERED')
-                            mensaje_extra = " y las reubicaciones"
-                        else:
-                            mensaje_extra = ""
-                        
-                        st.success(f"🗑️ ¡Las reservas{mensaje_extra} fueron anuladas! El sistema quedó limpio.")
+                        mensaje_extra = " y las reubicaciones" if 'filas_reubicacion' in st.session_state else ""
+                        st.session_state['mensaje_cancelado'] = f"¡Las reservas{mensaje_extra} fueron anuladas! El sistema quedó limpio."
                         
                         for clave in ['ultima_fila_inicio', 'ultima_fila_fin', 'ultimo_resumen', 'profes_desplazados', 'reubicacion_resuelta', 'reserva_datos', 'filas_reubicacion']:
                             if clave in st.session_state:
@@ -705,7 +715,7 @@ try:
                                     
                                 st.session_state['filas_reubicacion'] = filas_reubicadas
                                 st.session_state['reubicacion_resuelta'] = True
-                                st.success("¡Listo! Todos los profesores fueron reubicados exitosamente.")
+                                st.session_state['mostrar_globos'] = True  # Celebramos la reubicación también
                                 st.cache_data.clear()
                                 st.rerun()
                             except Exception as e:
